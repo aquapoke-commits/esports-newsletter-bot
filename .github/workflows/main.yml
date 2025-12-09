@@ -1,0 +1,29 @@
+name: Daily Esports News
+
+on:
+  schedule:
+    # 매일 한국 시간 오전 8시 (UTC 23:00)
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 수동 실행 버튼
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install libraries
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Bot
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: |
+          python bot.py
