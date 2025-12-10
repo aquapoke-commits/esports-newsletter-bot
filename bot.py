@@ -4,18 +4,29 @@ import requests
 from bs4 import BeautifulSoup
 import feedparser
 import html
-import os
+import os  # ★ 필수: 운영체제(OS)의 기능을 쓰기 위해 추가
 from datetime import datetime
 import asyncio
 
-# ==========================================
-# [설정] 깃허브 시크릿에서 토큰을 가져옵니다 (수정 X)
-# ==========================================
-DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
+# =====================================================================
+# [보안 설정] 토큰을 코드에 적지 않고 환경 변수에서 가져옵니다.
+# 깃허브 Settings > Secrets 에 저장해둔 'DISCORD_TOKEN'을 여기서 불러옵니다.
+# =====================================================================
+if 'DISCORD_TOKEN' in os.environ:
+    DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
+else:
+    # 깃허브가 아니라 내 컴퓨터에서 테스트할 때를 위한 안내
+    print("⚠️ 에러: DISCORD_TOKEN 환경 변수가 없습니다.")
+    print("   (깃허브 Actions에서 실행 중이라면 Secrets 설정을 확인하세요.)")
+    exit()
 
-# [설정] 채널 ID는 여기에 직접 적어주세요 (숫자만)
-CHANNEL_ID = 1447898781365567580 
-# ==========================================
+# [설정] 채널 ID 리스트 (여기는 숫자니까 공개돼도 괜찮습니다)
+# 콤마(,)로 구분해서 여러 개 추가 가능
+TARGET_CHANNELS = [
+    123456789012345678, # 첫 번째 서버
+    987654321098765432, # 두 번째 서버 (필요하면 추가)
+]
+# =====================================================================
 
 KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "롤드컵", "발로란트", "젠지", "HLE", "LoL"]
 
@@ -25,7 +36,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [크롤링 함수]
+# [크롤링 함수] (기존과 동일)
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
@@ -66,8 +77,7 @@ def collect_news():
     MAX_PER_KEYWORD = 4  
     
     for keyword in KEYWORDS:
-        if len(all_news) >= MAX_TOTAL:
-            break
+        if len(all_news) >= MAX_TOTAL: break
             
         n_res = get_naver_news(keyword)
         g_res = get_google_news(keyword)
@@ -75,28 +85,20 @@ def collect_news():
         current_keyword_count = 0
         
         for news in n_res + g_res:
-            if len(all_news) >= MAX_TOTAL:
-                break
-            
-            if current_keyword_count >= MAX_PER_KEYWORD:
-                break
+            if len(all_news) >= MAX_TOTAL: break
+            if current_keyword_count >= MAX_PER_KEYWORD: break
                 
             if news['link'] not in seen_links:
-                # 특수문자(&quot; 등)를 사람이 읽을 수 있게 변환
-                clean_title = html.unescape(news['title'])
-                # 보기 싫은 대괄호 제거 (선택사항)
-                clean_title = clean_title.replace("[", "").replace("]", "")
-                
+                clean_title = html.unescape(news['title']).replace("[", "").replace("]", "")
                 all_news.append({"title": clean_title, "link": news['link']})
                 seen_links.add(news['link'])
-                
                 current_keyword_count += 1
                 
     print(f"📊 수집 완료: 총 {len(all_news)}개")
     return all_news
 
 # ---------------------------------------------------
-# [전송 로직]
+# [전송 로직] (기존과 동일)
 # ---------------------------------------------------
 async def send_newsletter(target_channel_id):
     channel = bot.get_channel(target_channel_id)
@@ -111,56 +113,46 @@ async def send_newsletter(target_channel_id):
         return
 
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    
-    # 임베드 설명 길이 제한 (디스코드 최대 4096자, 안전하게 3500자)
     MAX_DESCRIPTION_LEN = 3500
-    
     current_description = ""
     page_count = 1
     
-    # 첫 표지 생성
-    embed = discord.Embed(
-        title=f"🎮 {today} 이스포츠 주요 소식",
-        color=0x00ff00 # 네온 그린
-    )
+    embed = discord.Embed(title=f"🎮 {today} 이스포츠 주요 소식", color=0x00ff00)
 
     for idx, news in enumerate(news_data):
-        # 한 줄 포맷: `번호.` [제목](링크)
         one_line = f"` {idx+1}. ` [{news['title']}]({news['link']})\n\n"
         
-        # 글자 수 초과 시 전송하고 새 페이지
         if len(current_description) + len(one_line) > MAX_DESCRIPTION_LEN:
             embed.description = current_description
             embed.set_footer(text=f"HantaGG NewsBot • {page_count}페이지")
             await channel.send(embed=embed)
-            
             page_count += 1
             current_description = ""
-            embed = discord.Embed(color=0x00ff00) # 새 임베드
+            embed = discord.Embed(color=0x00ff00)
             
         current_description += one_line
 
-    # 마지막 페이지 전송
     if current_description:
         embed.description = current_description
         embed.set_footer(text=f"HantaGG NewsBot • 마지막 페이지 (총 {len(news_data)}건)")
         await channel.send(embed=embed)
 
-    print("✅ 뉴스레터 발송 완료!")
+    print(f"✅ 전송 완료: {target_channel_id}")
 
 # ---------------------------------------------------
-# [봇 실행 및 자동 종료]
+# [봇 실행]
 # ---------------------------------------------------
 @bot.event
 async def on_ready():
     print(f"✅ 깃허브 액션 봇 로그인: {bot.user}")
     
-    # 뉴스 전송 시작
-    await send_newsletter(CHANNEL_ID)
+    # 등록된 모든 채널에 전송
+    for channel_id in TARGET_CHANNELS:
+        await send_newsletter(channel_id)
     
-    # 전송이 끝나면 봇을 끕니다 (깃허브 액션용 필수 코드)
     print("👋 임무 완료. 봇을 종료합니다.")
     await bot.close()
 
 if __name__ == "__main__":
+    # 여기서 환경변수에 저장된 진짜 토큰을 불러와서 실행합니다.
     bot.run(DISCORD_TOKEN)
