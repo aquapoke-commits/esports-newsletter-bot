@@ -29,7 +29,7 @@ TARGET_CHANNELS = [
 ]
 # =====================================================================
 
-KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "롤드컵", "발로란트", "젠지", "HLE", "LoL"]
+KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "발로란트", "젠지", "HLE", "KT"]
 
 # 봇 권한 설정
 intents = discord.Intents.default()
@@ -157,6 +157,7 @@ async def on_ready():
 if __name__ == "__main__":
     # 여기서 환경변수에 저장된 진짜 토큰을 불러와서 실행합니다.
     bot.run(DISCORD_TOKEN)
+
 
 
 
