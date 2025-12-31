@@ -4,41 +4,36 @@ import requests
 from bs4 import BeautifulSoup
 import feedparser
 import html
-import os  # ★ 필수: 운영체제(OS)의 기능을 쓰기 위해 추가
-from datetime import datetime, time delta
+import os
+from datetime import datetime, timedelta  # [수정] time delta -> timedelta (띄어쓰기 제거)
 import time
 import asyncio
 
 # =====================================================================
-# [보안 설정] 토큰을 코드에 적지 않고 환경 변수에서 가져옵니다.
-# 깃허브 Settings > Secrets 에 저장해둔 'DISCORD_TOKEN'을 여기서 불러옵니다.
+# [보안 설정]
 # =====================================================================
 if 'DISCORD_TOKEN' in os.environ:
     DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
 else:
-    # 깃허브가 아니라 내 컴퓨터에서 테스트할 때를 위한 안내
     print("⚠️ 에러: DISCORD_TOKEN 환경 변수가 없습니다.")
-    print("   (깃허브 Actions에서 실행 중이라면 Secrets 설정을 확인하세요.)")
     exit()
 
-# [설정] 채널 ID 리스트 (여기는 숫자니까 공개돼도 괜찮습니다)
-# 콤마(,)로 구분해서 여러 개 추가 가능
+# [설정] 채널 ID 리스트
 TARGET_CHANNELS = [
-    1447898781365567580, # 첫 번째 서버 _ GGX Proto
-    1450833963278012558, # 두 번째 서버 _ Hanta.GG
-    987654321098765432, # 세 번째 서버 (필요하면 추가)
+    1447898781365567580, # GGX Proto
+    1450833963278012558, # Hanta.GG
+    987654321098765432,  # 테스트용
 ]
-# =====================================================================
 
 KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "발로란트", "젠지", "HLE", "KT"]
 
-# 봇 권한 설정
+# 봇 설정
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [크롤링 함수] (기존과 동일)
+# [크롤링 함수]
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
@@ -53,7 +48,6 @@ def get_naver_news(keyword):
             link = item.select_one('.news_tit')['href']
             date_info = item.select_one('.info_group .info')
             
-            # [Naver 필터] "분 전", "시간 전" 글자가 없으면(즉, 날짜로 뜨면) 오래된 것이므로 패스
             if date_info:
                 time_text = date_info.text
                 if "분 전" in time_text or "시간 전" in time_text:
@@ -63,20 +57,15 @@ def get_naver_news(keyword):
 
 def get_google_news(keyword):
     news_list = []
-    # when:1d 옵션으로 요청하지만, 확실하게 하기 위해 아래에서 한 번 더 검사함
     url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            # [Google 필터] 작성 시간 확인 (24시간 이내인지 수학적으로 계산)
             if hasattr(entry, 'published_parsed'):
-                # 구글이 주는 시간을 파이썬 시간으로 변환
                 pub_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
-                
-                # (현재 시간 - 작성 시간)이 1일(24시간)보다 크면 건너뛰기
+                # 24시간 지난 뉴스 필터링
                 if datetime.now() - pub_time > timedelta(days=1):
                     continue
-            
             news_list.append({"title": entry.title, "link": entry.link})
     except: pass
     return news_list
@@ -87,10 +76,8 @@ def collect_news():
     seen_links = set()
     collected_titles = [] 
     
-    # [설정] 개수 제한
-    MAX_TOTAL = 20       
+    MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 4
-    # [설정] 중복 판정 기준 (10글자)
     DUPLICATE_THRESHOLD = 10
     
     for keyword in KEYWORDS:
@@ -105,18 +92,13 @@ def collect_news():
             if len(all_news) >= MAX_TOTAL: break
             if current_keyword_count >= MAX_PER_KEYWORD: break
             
-            # 1. 링크 중복 검사
-            if news['link'] in seen_links:
-                continue
+            if news['link'] in seen_links: continue
 
-            # 제목 정리
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
-            # 2. 제목 내용 중복 검사 (10글자 겹침)
             is_similar = False
             for existing_title in collected_titles:
                 if len(clean_title) < DUPLICATE_THRESHOLD: break
-                
                 for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
                     sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
                     if sub_string in existing_title:
@@ -124,27 +106,24 @@ def collect_news():
                         break 
                 if is_similar: break
 
-            # 통과한 뉴스만 추가
             if not is_similar:
                 all_news.append({"title": clean_title, "link": news['link']})
                 seen_links.add(news['link'])
                 collected_titles.append(clean_title)
                 current_keyword_count += 1
                 
-    print(f"📊 수집 완료: 총 {len(all_news)}개 (24시간 이내 & 중복 제거됨)")
+    print(f"📊 수집 완료: 총 {len(all_news)}개")
     return all_news
     
 # ---------------------------------------------------
-# [전송 로직] (기존과 동일)
+# [전송 로직] - 뉴스를 인자로 받도록 수정
 # ---------------------------------------------------
-async def send_newsletter(target_channel_id):
+async def send_newsletter(target_channel_id, news_data):
     channel = bot.get_channel(target_channel_id)
     if not channel:
         print(f"❌ 채널을 찾을 수 없습니다. (ID: {target_channel_id})")
         return
 
-    news_data = collect_news()
-    
     if not news_data:
         await channel.send("💤 지난 24시간 동안 새로운 이스포츠 뉴스가 없습니다.")
         return
@@ -183,18 +162,15 @@ async def send_newsletter(target_channel_id):
 async def on_ready():
     print(f"✅ 깃허브 액션 봇 로그인: {bot.user}")
     
-    # 등록된 모든 채널에 전송
+    # 1. 뉴스 수집은 딱 한 번만 실행! (효율성 UP)
+    todays_news = collect_news()
+    
+    # 2. 수집된 뉴스를 가지고 각 채널에 배달
     for channel_id in TARGET_CHANNELS:
-        await send_newsletter(channel_id)
+        await send_newsletter(channel_id, todays_news)
     
     print("👋 임무 완료. 봇을 종료합니다.")
     await bot.close()
 
 if __name__ == "__main__":
-    # 여기서 환경변수에 저장된 진짜 토큰을 불러와서 실행합니다.
     bot.run(DISCORD_TOKEN)
-
-
-
-
-
