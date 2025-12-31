@@ -5,7 +5,8 @@ from bs4 import BeautifulSoup
 import feedparser
 import html
 import os  # ★ 필수: 운영체제(OS)의 기능을 쓰기 위해 추가
-from datetime import datetime
+from datetime import datetime, time delta
+import time
 import asyncio
 
 # =====================================================================
@@ -51,6 +52,8 @@ def get_naver_news(keyword):
             title = item.select_one('.news_tit').text
             link = item.select_one('.news_tit')['href']
             date_info = item.select_one('.info_group .info')
+            
+            # [Naver 필터] "분 전", "시간 전" 글자가 없으면(즉, 날짜로 뜨면) 오래된 것이므로 패스
             if date_info:
                 time_text = date_info.text
                 if "분 전" in time_text or "시간 전" in time_text:
@@ -60,22 +63,35 @@ def get_naver_news(keyword):
 
 def get_google_news(keyword):
     news_list = []
+    # when:1d 옵션으로 요청하지만, 확실하게 하기 위해 아래에서 한 번 더 검사함
     url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
+            # [Google 필터] 작성 시간 확인 (24시간 이내인지 수학적으로 계산)
+            if hasattr(entry, 'published_parsed'):
+                # 구글이 주는 시간을 파이썬 시간으로 변환
+                pub_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
+                
+                # (현재 시간 - 작성 시간)이 1일(24시간)보다 크면 건너뛰기
+                if datetime.now() - pub_time > timedelta(days=1):
+                    continue
+            
             news_list.append({"title": entry.title, "link": entry.link})
     except: pass
     return news_list
 
 def collect_news():
-    print("📰 뉴스 수집 중...")
+    print("📰 뉴스 수집 및 필터링 중...")
     all_news = []
     seen_links = set()
+    collected_titles = [] 
     
     # [설정] 개수 제한
     MAX_TOTAL = 20       
-    MAX_PER_KEYWORD = 4  
+    MAX_PER_KEYWORD = 4
+    # [설정] 중복 판정 기준 (10글자)
+    DUPLICATE_THRESHOLD = 10
     
     for keyword in KEYWORDS:
         if len(all_news) >= MAX_TOTAL: break
@@ -88,16 +104,36 @@ def collect_news():
         for news in n_res + g_res:
             if len(all_news) >= MAX_TOTAL: break
             if current_keyword_count >= MAX_PER_KEYWORD: break
+            
+            # 1. 링크 중복 검사
+            if news['link'] in seen_links:
+                continue
+
+            # 제목 정리
+            clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
+            
+            # 2. 제목 내용 중복 검사 (10글자 겹침)
+            is_similar = False
+            for existing_title in collected_titles:
+                if len(clean_title) < DUPLICATE_THRESHOLD: break
                 
-            if news['link'] not in seen_links:
-                clean_title = html.unescape(news['title']).replace("[", "").replace("]", "")
+                for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
+                    sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
+                    if sub_string in existing_title:
+                        is_similar = True
+                        break 
+                if is_similar: break
+
+            # 통과한 뉴스만 추가
+            if not is_similar:
                 all_news.append({"title": clean_title, "link": news['link']})
                 seen_links.add(news['link'])
+                collected_titles.append(clean_title)
                 current_keyword_count += 1
                 
-    print(f"📊 수집 완료: 총 {len(all_news)}개")
+    print(f"📊 수집 완료: 총 {len(all_news)}개 (24시간 이내 & 중복 제거됨)")
     return all_news
-
+    
 # ---------------------------------------------------
 # [전송 로직] (기존과 동일)
 # ---------------------------------------------------
@@ -157,6 +193,7 @@ async def on_ready():
 if __name__ == "__main__":
     # 여기서 환경변수에 저장된 진짜 토큰을 불러와서 실행합니다.
     bot.run(DISCORD_TOKEN)
+
 
 
 
