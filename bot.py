@@ -78,7 +78,7 @@ def collect_news():
     
     MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 4
-    DUPLICATE_THRESHOLD = 10
+    DUPLICATE_THRESHOLD = 8
     
     for keyword in KEYWORDS:
         if len(all_news) >= MAX_TOTAL: break
@@ -174,4 +174,5 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
