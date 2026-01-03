@@ -25,7 +25,7 @@ TARGET_CHANNELS = [
     987654321098765432,  # 테스트용
 ]
 
-KEYWORDS = ["이스포츠", "VCT", "LCK", "PUBG", "티원", "Faker", "젠지", "HLE", "KT롤스터", "농심 레드포스", "DN SOOPers"]
+KEYWORDS = ["이스포츠", "VCT", "LCK", "PUBG", "티원", "Faker", "젠지", "HLE", "KT롤스터", "농심 레드포스", "DN SOOPers", "디플러스 기아", "피어엑스", "한진 브리온", "DRX"]
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -174,5 +174,6 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
