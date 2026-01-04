@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import feedparser
 import html
 import os
-from datetime import datetime, timedelta  # [수정] time delta -> timedelta (띄어쓰기 제거)
+from datetime import datetime, timedelta, timezone  # [수정] time delta -> timedelta (띄어쓰기 제거)
 import time
 import asyncio
 
@@ -57,17 +57,37 @@ def get_naver_news(keyword):
 
 def get_google_news(keyword):
     news_list = []
+    # when:1d (1일 이내) 옵션을 쓰지만, 구글이 가끔 옛날 것도 섞어줍니다.
     url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
+    
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            if hasattr(entry, 'published_parsed'):
-                pub_time = datetime.fromtimestamp(time.mktime(entry.published_parsed))
-                # 24시간 지난 뉴스 필터링
-                if datetime.now() - pub_time > timedelta(days=1):
+            # 1. 날짜 정보가 아예 없으면? -> 위험하니까 갖다 버림 (continue)
+            if not hasattr(entry, 'published_parsed') or entry.published_parsed is None:
+                continue
+            
+            # 2. 날짜가 있으면? -> UTC 기준으로 변환해서 정밀 계산
+            try:
+                # 구글이 준 시간(struct_time)을 UTC 날짜 객체로 변환
+                pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+                current_date = datetime.now(timezone.utc)
+                
+                # 3. 24시간(1일) 지났는지 체크
+                # 현재시간 - 작성시간 > 1일 이면 버림
+                if (current_date - pub_date) > timedelta(days=1):
                     continue
+            except:
+                # 날짜 계산하다 에러 나면? -> 안전하게 버림
+                continue
+            
+            # 위 험난한 관문을 모두 통과한 "진짜 최신 뉴스"만 담기
             news_list.append({"title": entry.title, "link": entry.link})
-    except: pass
+            
+    except Exception as e:
+        print(f"구글 뉴스 에러: {e}")
+        pass
+        
     return news_list
 
 def collect_news():
@@ -174,6 +194,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
