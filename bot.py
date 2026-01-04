@@ -29,7 +29,7 @@ TARGET_CHANNELS = [
 KEYWORDS = ["이스포츠", "VCT", "LCK", "PUBG", "티원", "Faker", "젠지", "HLE", "KT롤스터", "농심 레드포스", "DN SOOPers", "디플러스 기아", "피어엑스", "한진 브리온", "DRX"]
 
 # [설정] 차단할 단어 목록 (링크나 제목에 이 단어가 있으면 안 보냄)
-EXCLUDE_LIST = ["theqoo", "더쿠"]
+EXCLUDE_LIST = ["theqoo", "더쿠", "fmkorea", "펨코"]
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -198,6 +198,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
