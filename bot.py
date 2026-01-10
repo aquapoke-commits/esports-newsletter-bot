@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import feedparser
 import html
 import os
-from datetime import datetime, timedelta, timezone  # [수정] time delta -> timedelta (띄어쓰기 제거)
+from datetime import datetime, timedelta, timezone
 import time
 import asyncio
 
@@ -26,10 +26,11 @@ TARGET_CHANNELS = [
 ]
 
 # [설정] 검색어 목록
-KEYWORDS = ["이스포츠", "VCT", "LCK", "PUBG", "티원", "Faker", "Gen.G", "HLE", "KT롤스터", "농심 레드포스", "DN SOOPers", "디플러스 기아", "피어엑스", "한진 브리온", "DRX"]
+KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "발로란트", "젠지", "HLE", "KT"]
 
-# [설정] 차단할 단어 목록 (링크나 제목에 이 단어가 있으면 안 보냄)
-EXCLUDE_LIST = ["theqoo", "더쿠", "fmkorea", "펨코"]
+# [설정] 차단할 단어 목록 (소문자로 입력하세요)
+# 여기에 "dcinside", "fmkorea" 등을 추가하면 됩니다.
+EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "fmkorea", "dcinside"]
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -52,69 +53,62 @@ def get_naver_news(keyword):
             title = item.select_one('.news_tit').text
             link = item.select_one('.news_tit')['href']
             
-            # [수정] .info 태그가 여러 개일 수 있으니(언론사, 날짜 등) 모두 가져옵니다.
+            # [Naver 시간 필터]
             info_group = item.select('.info_group .info')
-            
             is_recent = False
             for info in info_group:
-                # "분 전" 또는 "시간 전"이라는 글자가 들어있는 태그만 찾습니다.
-                # "1일 전"은 24시간이 넘었을 수도 있으므로 여기서 걸러집니다.
                 if "분 전" in info.text or "시간 전" in info.text:
                     is_recent = True
                     break
             
-            # 조건을 통과한(진짜 최신) 뉴스만 담습니다.
             if is_recent:
-                news_list.append({"title": title, "link": link})
+                news_list.append({"title": title, "link": link, "source": "Naver"})
 
     except Exception as e:
-        print(f"❌ 네이버 크롤링 에러: {e}")
+        print(f"❌ 네이버 오류: {e}")
         pass
     return news_list
-    
+
 def get_google_news(keyword):
     news_list = []
-    # when:1d 옵션은 '검색 필터'일 뿐 완벽하지 않습니다. 파이썬이 다시 걸러야 합니다.
     url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            # 1. 날짜 정보가 없으면 위험하니까 무조건 버림
+            # 1. 날짜 정보 없으면 폐기
             if not hasattr(entry, 'published_parsed') or entry.published_parsed is None:
                 continue
             
             try:
-                # 2. 기사 작성 시간을 UTC(세계표준시)로 변환
+                # 2. 시간 정밀 계산 (UTC 기준)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
-                # 3. 시간 차이 계산 (초 단위)
-                diff = current_date - pub_date
-                diff_hours = diff.total_seconds() / 3600 # 시간으로 환산
-                
-                # [로그 출력] 내가 지금 심사하고 있는 뉴스가 얼마나 됐는지 눈으로 확인
-                # (너무 시끄러우면 나중에 주석 처리 하세요)
-                # print(f"🔍 심사 중: {entry.title[:10]}... | {diff_hours:.1f}시간 전 작성됨")
-
-                # 4. 24시간(1일)이 지났으면 과감히 버림 (continue)
-                if diff.days >= 1:
-                    # print(f"   ㄴ 🗑️ 탈락! (24시간 초과)")
+                # 24시간 초과 시 폐기
+                if (current_date - pub_date) > timedelta(days=1):
                     continue
                 
-                # 통과!
-                news_list.append({"title": entry.title, "link": entry.link})
+                # [중요] 구글 뉴스에서 '출처(언론사 이름)' 가져오기
+                source_name = ""
+                if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
+                    source_name = entry.source.title
                 
-            except Exception as e:
-                print(f"⚠️ 날짜 계산 오류: {e}")
+                news_list.append({
+                    "title": entry.title,
+                    "link": entry.link,
+                    "source": source_name # 출처 정보 저장 (예: Theqoo, Inven)
+                })
+                
+            except:
                 continue
                 
     except Exception as e:
-        print(f"❌ 구글 크롤링 에러: {e}")
+        print(f"❌ 구글 오류: {e}")
         pass
         
     return news_list
-    
+
 def collect_news():
     print("📰 뉴스 수집 및 필터링 중...")
     all_news = []
@@ -123,7 +117,7 @@ def collect_news():
     
     MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 4
-    DUPLICATE_THRESHOLD = 8
+    DUPLICATE_THRESHOLD = 10
     
     for keyword in KEYWORDS:
         if len(all_news) >= MAX_TOTAL: break
@@ -137,10 +131,33 @@ def collect_news():
             if len(all_news) >= MAX_TOTAL: break
             if current_keyword_count >= MAX_PER_KEYWORD: break
             
+            # =================================================
+            # [강화된 차단 필터]
+            # 1. 링크 주소 검사
+            # 2. 제목 검사
+            # 3. 출처(Source) 이름 검사 (구글뉴스용 핵심)
+            # =================================================
+            is_excluded = False
+            
+            # 검사할 모든 텍스트를 소문자로 변환해서 합침
+            check_target = (news['link'] + news['title'] + news.get('source', '')).lower()
+            
+            for ban_word in EXCLUDE_LIST:
+                if ban_word.lower() in check_target:
+                    is_excluded = True
+                    print(f"🚫 차단됨({ban_word}): {news['title']}") # 로그로 확인 가능
+                    break
+            
+            if is_excluded:
+                continue 
+
+            # 1. 링크 중복 검사
             if news['link'] in seen_links: continue
 
+            # 제목 정리
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
+            # 2. 제목 내용 중복 검사
             is_similar = False
             for existing_title in collected_titles:
                 if len(clean_title) < DUPLICATE_THRESHOLD: break
@@ -159,9 +176,9 @@ def collect_news():
                 
     print(f"📊 수집 완료: 총 {len(all_news)}개")
     return all_news
-    
+
 # ---------------------------------------------------
-# [전송 로직] - 뉴스를 인자로 받도록 수정
+# [전송 로직]
 # ---------------------------------------------------
 async def send_newsletter(target_channel_id, news_data):
     channel = bot.get_channel(target_channel_id)
@@ -170,7 +187,6 @@ async def send_newsletter(target_channel_id, news_data):
         return
 
     if not news_data:
-        await channel.send("💤 지난 24시간 동안 새로운 이스포츠 뉴스가 없습니다.")
         return
 
     today = datetime.now().strftime("%Y년 %m월 %d일")
@@ -207,10 +223,8 @@ async def send_newsletter(target_channel_id, news_data):
 async def on_ready():
     print(f"✅ 깃허브 액션 봇 로그인: {bot.user}")
     
-    # 1. 뉴스 수집은 딱 한 번만 실행! (효율성 UP)
     todays_news = collect_news()
     
-    # 2. 수집된 뉴스를 가지고 각 채널에 배달
     for channel_id in TARGET_CHANNELS:
         await send_newsletter(channel_id, todays_news)
     
@@ -219,12 +233,3 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
-
-
-
-
-
-
-
-
-
