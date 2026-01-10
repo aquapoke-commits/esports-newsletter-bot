@@ -5,8 +5,8 @@ from bs4 import BeautifulSoup
 import feedparser
 import html
 import os
+# [중요] 정확한 시간 계산을 위해 timezone 필수
 from datetime import datetime, timedelta, timezone
-import time
 import asyncio
 
 # =====================================================================
@@ -28,9 +28,12 @@ TARGET_CHANNELS = [
 # [설정] 검색어 목록
 KEYWORDS = ["이스포츠", "LCK", "T1", "Faker", "발로란트", "젠지", "HLE", "KT"]
 
-# [설정] 차단할 단어 목록 (소문자로 입력하세요)
-# 여기에 "dcinside", "fmkorea" 등을 추가하면 됩니다.
+# [설정] 차단할 단어 (소문자)
 EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "fmkorea", "dcinside"]
+
+# [설정] 뉴스 유효 시간 (단위: 시간)
+# 24시간이 너무 널널하면 18~20시간으로 줄이세요.
+MAX_HOURS = 20 
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -53,16 +56,25 @@ def get_naver_news(keyword):
             title = item.select_one('.news_tit').text
             link = item.select_one('.news_tit')['href']
             
-            # [Naver 시간 필터]
+            # [Naver 시간 정밀 검사]
             info_group = item.select('.info_group .info')
             is_recent = False
+            
             for info in info_group:
-                if "분 전" in info.text or "시간 전" in info.text:
+                text = info.text
+                # 1. "분 전"이나 "시간 전"이 반드시 있어야 함
+                if "분 전" in text or "시간 전" in text:
+                    # 2. 혹시 "1일 전" 같은 말이 섞여 있으면 탈락 (수정된 구 기사일 수 있음)
+                    if "일 전" in text:
+                        is_recent = False
+                        break
                     is_recent = True
                     break
             
             if is_recent:
                 news_list.append({"title": title, "link": link, "source": "Naver"})
+            # else:
+            #     print(f"   🗑️ [네이버] 오래됨 탈락: {title}")
 
     except Exception as e:
         print(f"❌ 네이버 오류: {e}")
@@ -81,15 +93,26 @@ def get_google_news(keyword):
                 continue
             
             try:
-                # 2. 시간 정밀 계산 (UTC 기준)
+                # 2. 시간 계산 (UTC 기준)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
-                # 24시간 초과 시 폐기
-                if (current_date - pub_date) > timedelta(days=1):
+                # 시차(초) 계산
+                diff_seconds = (current_date - pub_date).total_seconds()
+                diff_hours = diff_seconds / 3600
+                
+                # 미래 시간(오류)이면 0으로 보정
+                if diff_hours < 0: diff_hours = 0
+                
+                # [로그 출력] 심사 결과 보여주기
+                # print(f"🔍 심사: {entry.title[:10]}... ({diff_hours:.1f}시간 전)")
+                
+                # 3. 설정한 시간(MAX_HOURS) 보다 오래됐으면 폐기
+                if diff_hours > MAX_HOURS:
+                    # print(f"   ㄴ 🗑️ 시간초과 탈락!")
                     continue
                 
-                # [중요] 구글 뉴스에서 '출처(언론사 이름)' 가져오기
+                # 출처 가져오기
                 source_name = ""
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
@@ -97,7 +120,7 @@ def get_google_news(keyword):
                 news_list.append({
                     "title": entry.title,
                     "link": entry.link,
-                    "source": source_name # 출처 정보 저장 (예: Theqoo, Inven)
+                    "source": source_name 
                 })
                 
             except:
@@ -110,7 +133,7 @@ def get_google_news(keyword):
     return news_list
 
 def collect_news():
-    print("📰 뉴스 수집 및 필터링 중...")
+    print(f"📰 뉴스 수집 시작 (최근 {MAX_HOURS}시간 이내 기사만 수집)")
     all_news = []
     seen_links = set()
     collected_titles = [] 
@@ -131,33 +154,24 @@ def collect_news():
             if len(all_news) >= MAX_TOTAL: break
             if current_keyword_count >= MAX_PER_KEYWORD: break
             
-            # =================================================
-            # [강화된 차단 필터]
-            # 1. 링크 주소 검사
-            # 2. 제목 검사
-            # 3. 출처(Source) 이름 검사 (구글뉴스용 핵심)
-            # =================================================
+            # [차단 필터]
             is_excluded = False
-            
-            # 검사할 모든 텍스트를 소문자로 변환해서 합침
             check_target = (news['link'] + news['title'] + news.get('source', '')).lower()
             
             for ban_word in EXCLUDE_LIST:
                 if ban_word.lower() in check_target:
                     is_excluded = True
-                    print(f"🚫 차단됨({ban_word}): {news['title']}") # 로그로 확인 가능
+                    print(f"🚫 차단됨({ban_word}): {news['title']}") 
                     break
             
-            if is_excluded:
-                continue 
+            if is_excluded: continue 
 
-            # 1. 링크 중복 검사
+            # 링크 중복 검사
             if news['link'] in seen_links: continue
 
-            # 제목 정리
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
-            # 2. 제목 내용 중복 검사
+            # 제목 내용 중복 검사
             is_similar = False
             for existing_title in collected_titles:
                 if len(clean_title) < DUPLICATE_THRESHOLD: break
@@ -174,7 +188,7 @@ def collect_news():
                 collected_titles.append(clean_title)
                 current_keyword_count += 1
                 
-    print(f"📊 수집 완료: 총 {len(all_news)}개")
+    print(f"📊 최종 선별 완료: 총 {len(all_news)}개")
     return all_news
 
 # ---------------------------------------------------
@@ -183,7 +197,7 @@ def collect_news():
 async def send_newsletter(target_channel_id, news_data):
     channel = bot.get_channel(target_channel_id)
     if not channel:
-        print(f"❌ 채널을 찾을 수 없습니다. (ID: {target_channel_id})")
+        print(f"❌ 채널 없음: {target_channel_id}")
         return
 
     if not news_data:
@@ -221,14 +235,14 @@ async def send_newsletter(target_channel_id, news_data):
 # ---------------------------------------------------
 @bot.event
 async def on_ready():
-    print(f"✅ 깃허브 액션 봇 로그인: {bot.user}")
+    print(f"✅ 봇 로그인: {bot.user}")
     
     todays_news = collect_news()
     
     for channel_id in TARGET_CHANNELS:
         await send_newsletter(channel_id, todays_news)
     
-    print("👋 임무 완료. 봇을 종료합니다.")
+    print("👋 임무 완료. 종료합니다.")
     await bot.close()
 
 if __name__ == "__main__":
