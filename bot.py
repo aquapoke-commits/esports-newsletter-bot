@@ -45,7 +45,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
-    url = f"https://search.naver.com/search.naver?where=news&query={keyword}&sort=1"
+    
+    # [수정] 네이버도 띄어쓰기를 '+'로 바꿔줘야 안전합니다.
+    clean_keyword = keyword.replace(" ", "+")
+    
+    url = f"https://search.naver.com/search.naver?where=news&query={clean_keyword}&sort=1"
     headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         res = requests.get(url, headers=headers)
@@ -62,9 +66,8 @@ def get_naver_news(keyword):
             
             for info in info_group:
                 text = info.text
-                # 1. "분 전"이나 "시간 전"이 반드시 있어야 함
                 if "분 전" in text or "시간 전" in text:
-                    # 2. 혹시 "1일 전" 같은 말이 섞여 있으면 탈락 (수정된 구 기사일 수 있음)
+                    # "1일 전" 등이 섞여 있으면 탈락
                     if "일 전" in text:
                         is_recent = False
                         break
@@ -73,46 +76,38 @@ def get_naver_news(keyword):
             
             if is_recent:
                 news_list.append({"title": title, "link": link, "source": "Naver"})
-            # else:
-            #     print(f"   🗑️ [네이버] 오래됨 탈락: {title}")
 
     except Exception as e:
-        print(f"❌ 네이버 오류: {e}")
+        print(f"❌ 네이버 오류({keyword}): {e}")
         pass
     return news_list
 
 def get_google_news(keyword):
     news_list = []
-    url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
+    
+    # [수정] 구글 URL 에러 방지 (공백 -> +)
+    clean_keyword = keyword.replace(" ", "+")
+    
+    url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            # 1. 날짜 정보 없으면 폐기
             if not hasattr(entry, 'published_parsed') or entry.published_parsed is None:
                 continue
             
             try:
-                # 2. 시간 계산 (UTC 기준)
+                # 시간 계산 (UTC)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
-                # 시차(초) 계산
                 diff_seconds = (current_date - pub_date).total_seconds()
                 diff_hours = diff_seconds / 3600
-                
-                # 미래 시간(오류)이면 0으로 보정
                 if diff_hours < 0: diff_hours = 0
                 
-                # [로그 출력] 심사 결과 보여주기
-                # print(f"🔍 심사: {entry.title[:10]}... ({diff_hours:.1f}시간 전)")
-                
-                # 3. 설정한 시간(MAX_HOURS) 보다 오래됐으면 폐기
                 if diff_hours > MAX_HOURS:
-                    # print(f"   ㄴ 🗑️ 시간초과 탈락!")
                     continue
                 
-                # 출처 가져오기
                 source_name = ""
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
@@ -127,7 +122,7 @@ def get_google_news(keyword):
                 continue
                 
     except Exception as e:
-        print(f"❌ 구글 오류: {e}")
+        print(f"❌ 구글 오류({keyword}): {e}")
         pass
         
     return news_list
@@ -247,5 +242,6 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
