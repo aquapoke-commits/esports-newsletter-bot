@@ -47,53 +47,74 @@ def get_naver_news(keyword):
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         items = soup.select('.news_wrap')
+        
         for item in items:
             title = item.select_one('.news_tit').text
             link = item.select_one('.news_tit')['href']
-            date_info = item.select_one('.info_group .info')
             
-            if date_info:
-                time_text = date_info.text
-                if "분 전" in time_text or "시간 전" in time_text:
-                    news_list.append({"title": title, "link": link})
-    except: pass
-    return news_list
+            # [수정] .info 태그가 여러 개일 수 있으니(언론사, 날짜 등) 모두 가져옵니다.
+            info_group = item.select('.info_group .info')
+            
+            is_recent = False
+            for info in info_group:
+                # "분 전" 또는 "시간 전"이라는 글자가 들어있는 태그만 찾습니다.
+                # "1일 전"은 24시간이 넘었을 수도 있으므로 여기서 걸러집니다.
+                if "분 전" in info.text or "시간 전" in info.text:
+                    is_recent = True
+                    break
+            
+            # 조건을 통과한(진짜 최신) 뉴스만 담습니다.
+            if is_recent:
+                news_list.append({"title": title, "link": link})
 
+    except Exception as e:
+        print(f"❌ 네이버 크롤링 에러: {e}")
+        pass
+    return news_list
+    
 def get_google_news(keyword):
     news_list = []
-    # when:1d (1일 이내) 옵션을 쓰지만, 구글이 가끔 옛날 것도 섞어줍니다.
+    # when:1d 옵션은 '검색 필터'일 뿐 완벽하지 않습니다. 파이썬이 다시 걸러야 합니다.
     url = f"https://news.google.com/rss/search?q={keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
-            # 1. 날짜 정보가 아예 없으면? -> 위험하니까 갖다 버림 (continue)
+            # 1. 날짜 정보가 없으면 위험하니까 무조건 버림
             if not hasattr(entry, 'published_parsed') or entry.published_parsed is None:
                 continue
             
-            # 2. 날짜가 있으면? -> UTC 기준으로 변환해서 정밀 계산
             try:
-                # 구글이 준 시간(struct_time)을 UTC 날짜 객체로 변환
+                # 2. 기사 작성 시간을 UTC(세계표준시)로 변환
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
-                # 3. 24시간(1일) 지났는지 체크
-                # 현재시간 - 작성시간 > 1일 이면 버림
-                if (current_date - pub_date) > timedelta(days=1):
+                # 3. 시간 차이 계산 (초 단위)
+                diff = current_date - pub_date
+                diff_hours = diff.total_seconds() / 3600 # 시간으로 환산
+                
+                # [로그 출력] 내가 지금 심사하고 있는 뉴스가 얼마나 됐는지 눈으로 확인
+                # (너무 시끄러우면 나중에 주석 처리 하세요)
+                # print(f"🔍 심사 중: {entry.title[:10]}... | {diff_hours:.1f}시간 전 작성됨")
+
+                # 4. 24시간(1일)이 지났으면 과감히 버림 (continue)
+                if diff.days >= 1:
+                    # print(f"   ㄴ 🗑️ 탈락! (24시간 초과)")
                     continue
-            except:
-                # 날짜 계산하다 에러 나면? -> 안전하게 버림
+                
+                # 통과!
+                news_list.append({"title": entry.title, "link": entry.link})
+                
+            except Exception as e:
+                print(f"⚠️ 날짜 계산 오류: {e}")
                 continue
-            
-            # 위 험난한 관문을 모두 통과한 "진짜 최신 뉴스"만 담기
-            news_list.append({"title": entry.title, "link": entry.link})
-            
+                
     except Exception as e:
-        print(f"구글 뉴스 에러: {e}")
+        print(f"❌ 구글 크롤링 에러: {e}")
         pass
         
     return news_list
-
+    
 def collect_news():
     print("📰 뉴스 수집 및 필터링 중...")
     all_news = []
@@ -198,6 +219,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
