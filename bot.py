@@ -33,7 +33,7 @@ EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "fmkorea", "dcinside"]
 
 # [설정] 뉴스 유효 시간 (단위: 시간)
 # 24시간이 너무 널널하면 18~20시간으로 줄이세요.
-MAX_HOURS = 20 
+MAX_HOURS = 24
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -247,4 +247,5 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
