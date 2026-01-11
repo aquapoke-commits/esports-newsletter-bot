@@ -25,7 +25,7 @@ TARGET_CHANNELS = [
 ]
 
 # [설정] 검색어 목록
-KEYWORDS = ["이스포츠", "LCK", "VCT", "FSL", "이터널 리턴 이스포츠", "PUBG", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
+KEYWORDS = ["이스포츠", "LCK", "VCT", "FSL", "이터널 리턴 마스터즈", "PUBG", "PWS", "PNC", "PGC","GSL", "SSL", "ATL", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
 
 # [설정] 차단할 단어 (소문자) - 도박 및 커뮤니티 추가됨
 EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "브런치", "인벤", "MSN"]
@@ -286,6 +286,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
