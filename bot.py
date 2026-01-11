@@ -52,7 +52,12 @@ def get_naver_news(keyword):
     try:
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
-        items = soup.select('.news_wrap')
+        
+        # [수정] 네이버 뉴스 담는 그릇 이름이 바뀌었을 수 있어 'news_area'로 변경
+        items = soup.select('div.news_area')
+        
+        # [로그] 실제로 네이버가 몇 개나 잡혔는지 확인
+        # print(f"🔍 [네이버] '{keyword}' 원본 검색결과: {len(items)}개") 
         
         for item in items:
             title = item.select_one('.news_tit').text
@@ -61,14 +66,14 @@ def get_naver_news(keyword):
             # [Naver 시간 정밀 검사]
             info_group = item.select('.info_group .info')
             is_recent = False
-            time_log = "알수없음" # 로그용 변수
+            time_log = "알수없음"
             
             for info in info_group:
                 text = info.text
                 if "분 전" in text or "시간 전" in text:
-                    time_log = text # 예: "1시간 전" 저장
+                    time_log = text 
                     if "일 전" in text:
-                        print(f"⏰ [네이버|탈락] {keyword} | {title} (작성시간: {text} - 수정된 구 기사)")
+                        # print(f"⏰ [네이버|탈락] {keyword} | {title} (사유: '{text}' - 수정된 구 기사)")
                         is_recent = False
                         break
                     is_recent = True
@@ -80,7 +85,7 @@ def get_naver_news(keyword):
                     "link": link, 
                     "source": "Naver", 
                     "origin": "네이버",
-                    "time_str": time_log # 작성 시간 정보 저장
+                    "time_str": time_log 
                 })
 
     except Exception as e:
@@ -263,6 +268,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
