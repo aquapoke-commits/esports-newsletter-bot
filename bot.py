@@ -41,7 +41,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [크롤링 함수] - 상세 로그 추가됨
+# [크롤링 함수] - 작성 시간 로그 추가
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
@@ -61,31 +61,27 @@ def get_naver_news(keyword):
             # [Naver 시간 정밀 검사]
             info_group = item.select('.info_group .info')
             is_recent = False
-            time_log = "시간정보 없음"
+            time_log = "알수없음" # 로그용 변수
             
             for info in info_group:
                 text = info.text
                 if "분 전" in text or "시간 전" in text:
-                    time_log = text # 로그용 저장
-                    # "1일 전" 등이 섞여 있으면 탈락
+                    time_log = text # 예: "1시간 전" 저장
                     if "일 전" in text:
-                        print(f"⏰ [네이버|탈락] {keyword} | {title} (사유: '{text}' - 수정된 구 기사)")
+                        print(f"⏰ [네이버|탈락] {keyword} | {title} (작성시간: {text} - 수정된 구 기사)")
                         is_recent = False
                         break
                     is_recent = True
                     break
             
             if is_recent:
-                # 일단 후보군에 등록 (나중에 중복/차단 검사 함)
-                # print(f"🔍 [네이버|후보] {keyword} | {title} ({time_log})") 
-                news_list.append({"title": title, "link": link, "source": "Naver"})
-            else:
-                # 시간 정보가 없거나 오래된 경우
-                if "일 전" not in time_log and "분 전" not in time_log and "시간 전" not in time_log:
-                     # 날짜만 찍힌 경우 (예: 2024.01.10)
-                     pass 
-                     # 너무 로그가 많아질까봐 날짜 탈락은 생략했지만, 보고 싶으면 아래 주석 해제
-                     # print(f"⏰ [네이버|탈락] {keyword} | {title} (사유: 날짜 형식)")
+                news_list.append({
+                    "title": title, 
+                    "link": link, 
+                    "source": "Naver", 
+                    "origin": "네이버",
+                    "time_str": time_log # 작성 시간 정보 저장
+                })
 
     except Exception as e:
         print(f"❌ 네이버 오류({keyword}): {e}")
@@ -104,7 +100,7 @@ def get_google_news(keyword):
                 continue
             
             try:
-                # 시간 계산 (UTC)
+                # 1. 시간 계산 (UTC 기준)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
@@ -112,23 +108,24 @@ def get_google_news(keyword):
                 diff_hours = diff_seconds / 3600
                 if diff_hours < 0: diff_hours = 0
                 
-                # 로그용 출처 이름
+                # 2. 로그 출력을 위해 한국 시간(KST)으로 변환
+                pub_date_kst = pub_date + timedelta(hours=9)
+                time_str_kst = pub_date_kst.strftime("%Y-%m-%d %H:%M:%S")
+
                 source_name = "Google"
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
 
-                # 시간 제한 검사
                 if diff_hours > MAX_HOURS:
-                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} ({diff_hours:.1f}시간 전)")
+                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst} | {diff_hours:.1f}시간 전)")
                     continue
-                
-                # 통과하면 후보 등록
-                # print(f"🔍 [구글|후보] {keyword} | {entry.title} ({diff_hours:.1f}시간 전)")
                 
                 news_list.append({
                     "title": entry.title,
                     "link": entry.link,
-                    "source": source_name 
+                    "source": source_name,
+                    "origin": "구글",
+                    "time_str": time_str_kst # 한국 시간 문자열 저장
                 })
                 
             except:
@@ -160,12 +157,10 @@ def collect_news():
         
         current_keyword_count = 0
         
-        # 가져온 후보군들 최종 심사
         for news in n_res + g_res:
             if len(all_news) >= MAX_TOTAL: break
             
             if current_keyword_count >= MAX_PER_KEYWORD: 
-                # print(f"🛑 [개수제한] 키워드 '{keyword}' 할당량(4개) 초과")
                 break
             
             # [1] 차단 사이트 필터
@@ -175,14 +170,13 @@ def collect_news():
             for ban_word in EXCLUDE_LIST:
                 if ban_word.lower() in check_target:
                     is_excluded = True
-                    print(f"🚫 [사이트차단] {news['title']} (이유: {ban_word})") 
+                    print(f"🚫 [사이트차단][{news['origin']}] {news['title']} (이유: {ban_word})") 
                     break
             
             if is_excluded: continue 
 
             # [2] 링크 중복 필터
             if news['link'] in seen_links: 
-                # print(f"🔗 [링크중복] {news['title']}")
                 continue
 
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
@@ -199,11 +193,12 @@ def collect_news():
                 if is_similar: break
 
             if is_similar:
-                print(f"🔗 [내용중복] {clean_title} (이미 비슷한 기사가 있음)")
+                print(f"🔗 [내용중복][{news['origin']}] {clean_title}")
                 continue
 
-            # [4] 최종 합격
-            print(f"✅ [최종선별] {clean_title}")
+            # [4] 최종 합격 - 작성 시간 정보(time_str) 함께 출력
+            print(f"✅ [최종선별][{news['origin']}] {clean_title} (작성시간: {news.get('time_str', '알수없음')})")
+            
             all_news.append({"title": clean_title, "link": news['link']})
             seen_links.add(news['link'])
             collected_titles.append(clean_title)
@@ -268,6 +263,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
