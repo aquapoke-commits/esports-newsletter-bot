@@ -41,16 +41,14 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [크롤링 함수]
+# [크롤링 함수] - 상세 로그 추가됨
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
-    
-    # [수정] 네이버도 띄어쓰기를 '+'로 바꿔줘야 안전합니다.
     clean_keyword = keyword.replace(" ", "+")
-    
     url = f"https://search.naver.com/search.naver?where=news&query={clean_keyword}&sort=1"
     headers = {'User-Agent': 'Mozilla/5.0'}
+    
     try:
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -63,19 +61,31 @@ def get_naver_news(keyword):
             # [Naver 시간 정밀 검사]
             info_group = item.select('.info_group .info')
             is_recent = False
+            time_log = "시간정보 없음"
             
             for info in info_group:
                 text = info.text
                 if "분 전" in text or "시간 전" in text:
+                    time_log = text # 로그용 저장
                     # "1일 전" 등이 섞여 있으면 탈락
                     if "일 전" in text:
+                        print(f"⏰ [네이버|탈락] {keyword} | {title} (사유: '{text}' - 수정된 구 기사)")
                         is_recent = False
                         break
                     is_recent = True
                     break
             
             if is_recent:
+                # 일단 후보군에 등록 (나중에 중복/차단 검사 함)
+                # print(f"🔍 [네이버|후보] {keyword} | {title} ({time_log})") 
                 news_list.append({"title": title, "link": link, "source": "Naver"})
+            else:
+                # 시간 정보가 없거나 오래된 경우
+                if "일 전" not in time_log and "분 전" not in time_log and "시간 전" not in time_log:
+                     # 날짜만 찍힌 경우 (예: 2024.01.10)
+                     pass 
+                     # 너무 로그가 많아질까봐 날짜 탈락은 생략했지만, 보고 싶으면 아래 주석 해제
+                     # print(f"⏰ [네이버|탈락] {keyword} | {title} (사유: 날짜 형식)")
 
     except Exception as e:
         print(f"❌ 네이버 오류({keyword}): {e}")
@@ -84,10 +94,7 @@ def get_naver_news(keyword):
 
 def get_google_news(keyword):
     news_list = []
-    
-    # [수정] 구글 URL 에러 방지 (공백 -> +)
     clean_keyword = keyword.replace(" ", "+")
-    
     url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
@@ -105,12 +112,18 @@ def get_google_news(keyword):
                 diff_hours = diff_seconds / 3600
                 if diff_hours < 0: diff_hours = 0
                 
-                if diff_hours > MAX_HOURS:
-                    continue
-                
-                source_name = ""
+                # 로그용 출처 이름
+                source_name = "Google"
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
+
+                # 시간 제한 검사
+                if diff_hours > MAX_HOURS:
+                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} ({diff_hours:.1f}시간 전)")
+                    continue
+                
+                # 통과하면 후보 등록
+                # print(f"🔍 [구글|후보] {keyword} | {entry.title} ({diff_hours:.1f}시간 전)")
                 
                 news_list.append({
                     "title": entry.title,
@@ -128,7 +141,7 @@ def get_google_news(keyword):
     return news_list
 
 def collect_news():
-    print(f"📰 뉴스 수집 시작 (최근 {MAX_HOURS}시간 이내 기사만 수집)")
+    print(f"\n📰 뉴스 수집 및 정밀 심사 시작 (제한: {MAX_HOURS}시간)")
     all_news = []
     seen_links = set()
     collected_titles = [] 
@@ -138,35 +151,43 @@ def collect_news():
     DUPLICATE_THRESHOLD = 10
     
     for keyword in KEYWORDS:
-        if len(all_news) >= MAX_TOTAL: break
+        if len(all_news) >= MAX_TOTAL: 
+            print("🛑 [전체제한] 총 20개를 모두 채워 수집을 종료합니다.")
+            break
             
         n_res = get_naver_news(keyword)
         g_res = get_google_news(keyword)
         
         current_keyword_count = 0
         
+        # 가져온 후보군들 최종 심사
         for news in n_res + g_res:
             if len(all_news) >= MAX_TOTAL: break
-            if current_keyword_count >= MAX_PER_KEYWORD: break
             
-            # [차단 필터]
+            if current_keyword_count >= MAX_PER_KEYWORD: 
+                # print(f"🛑 [개수제한] 키워드 '{keyword}' 할당량(4개) 초과")
+                break
+            
+            # [1] 차단 사이트 필터
             is_excluded = False
             check_target = (news['link'] + news['title'] + news.get('source', '')).lower()
             
             for ban_word in EXCLUDE_LIST:
                 if ban_word.lower() in check_target:
                     is_excluded = True
-                    print(f"🚫 차단됨({ban_word}): {news['title']}") 
+                    print(f"🚫 [사이트차단] {news['title']} (이유: {ban_word})") 
                     break
             
             if is_excluded: continue 
 
-            # 링크 중복 검사
-            if news['link'] in seen_links: continue
+            # [2] 링크 중복 필터
+            if news['link'] in seen_links: 
+                # print(f"🔗 [링크중복] {news['title']}")
+                continue
 
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
-            # 제목 내용 중복 검사
+            # [3] 제목 내용 중복 필터
             is_similar = False
             for existing_title in collected_titles:
                 if len(clean_title) < DUPLICATE_THRESHOLD: break
@@ -177,15 +198,20 @@ def collect_news():
                         break 
                 if is_similar: break
 
-            if not is_similar:
-                all_news.append({"title": clean_title, "link": news['link']})
-                seen_links.add(news['link'])
-                collected_titles.append(clean_title)
-                current_keyword_count += 1
-                
-    print(f"📊 최종 선별 완료: 총 {len(all_news)}개")
-    return all_news
+            if is_similar:
+                print(f"🔗 [내용중복] {clean_title} (이미 비슷한 기사가 있음)")
+                continue
 
+            # [4] 최종 합격
+            print(f"✅ [최종선별] {clean_title}")
+            all_news.append({"title": clean_title, "link": news['link']})
+            seen_links.add(news['link'])
+            collected_titles.append(clean_title)
+            current_keyword_count += 1
+                
+    print(f"📊 최종 결과: {len(all_news)}개 뉴스 전송 준비 완료\n")
+    return all_news
+    
 # ---------------------------------------------------
 # [전송 로직]
 # ---------------------------------------------------
@@ -242,6 +268,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
