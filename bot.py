@@ -29,7 +29,7 @@ TARGET_CHANNELS = [
 KEYWORDS = ["이스포츠", "LCK", "VCT", "이터널 리턴 이스포츠", "PUBG", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
 
 # [설정] 차단할 단어 (소문자)
-EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "fmkorea", "dcinside"]
+EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "fmkorea", "dcinside", "디시", "바카라"]
 
 # [설정] 뉴스 유효 시간 (단위: 시간)
 # 24시간이 너무 널널하면 18~20시간으로 줄이세요.
@@ -53,17 +53,21 @@ def get_naver_news(keyword):
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # [수정] 네이버 뉴스 담는 그릇 이름이 바뀌었을 수 있어 'news_area'로 변경
-        items = soup.select('div.news_area')
+        # [수정] 가장 안전한 방법: 리스트 항목(li.bx)을 먼저 찾습니다.
+        items = soup.select('ul.list_news > li.bx')
         
-        # [로그] 실제로 네이버가 몇 개나 잡혔는지 확인
-        # print(f"🔍 [네이버] '{keyword}' 원본 검색결과: {len(items)}개") 
+        # print(f"🔍 [네이버] '{keyword}' 검색결과: {len(items)}개 발견") 
         
         for item in items:
-            title = item.select_one('.news_tit').text
-            link = item.select_one('.news_tit')['href']
+            # 제목이 없으면 뉴스 아님 (패스)
+            title_tag = item.select_one('a.news_tit')
+            if not title_tag: continue
+            
+            title = title_tag.text
+            link = title_tag['href']
             
             # [Naver 시간 정밀 검사]
+            # info_group이 없을 수도 있어서 안전하게 처리
             info_group = item.select('.info_group .info')
             is_recent = False
             time_log = "알수없음"
@@ -98,6 +102,10 @@ def get_google_news(keyword):
     clean_keyword = keyword.replace(" ", "+")
     url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
+    # [연도 필터] 구글이 2026년인데 2025년 기사를 '오늘'로 착각해서 보낼 때 거르기 위함
+    # 현재 연도(2026)가 아닌 과거 연도가 제목에 있으면 의심
+    PAST_YEARS = ["2020", "2021", "2022", "2023", "2024", "2025"] 
+
     try:
         feed = feedparser.parse(url)
         for entry in feed.entries:
@@ -105,7 +113,7 @@ def get_google_news(keyword):
                 continue
             
             try:
-                # 1. 시간 계산 (UTC 기준)
+                # 1. 시간 계산 (UTC)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
@@ -113,7 +121,6 @@ def get_google_news(keyword):
                 diff_hours = diff_seconds / 3600
                 if diff_hours < 0: diff_hours = 0
                 
-                # 2. 로그 출력을 위해 한국 시간(KST)으로 변환
                 pub_date_kst = pub_date + timedelta(hours=9)
                 time_str_kst = pub_date_kst.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -121,16 +128,31 @@ def get_google_news(keyword):
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
 
+                # [시간 제한]
                 if diff_hours > MAX_HOURS:
-                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst} | {diff_hours:.1f}시간 전)")
+                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst})")
                     continue
                 
+                # [추가 필터] 제목에 과거 연도가 포함되어 있는지 검사 (예: 김정균 감독 2025...)
+                is_old_title = False
+                for year in PAST_YEARS:
+                    # 제목에는 있는데, 문맥상 '2025 시즌 결산' 같은 건 통과시켜야 할 수도 있음.
+                    # 하지만 지금처럼 '엉뚱한 옛날 기사'가 문제라면 과감히 거르는 게 낫습니다.
+                    if year in entry.title:
+                         # 현재가 2026년 1월이므로 '2025'는 놔둘지 고민되지만, 
+                         # 명확한 과거 기사 재탕을 막으려면 거르는게 안전합니다.
+                         # (필요시 리스트에서 "2025"는 빼세요)
+                         is_old_title = True
+                         print(f"📅 [구글|연도탈락] {entry.title} (이유: 과거 연도 '{year}' 포함)")
+                         break
+                if is_old_title: continue
+
                 news_list.append({
                     "title": entry.title,
                     "link": entry.link,
                     "source": source_name,
                     "origin": "구글",
-                    "time_str": time_str_kst # 한국 시간 문자열 저장
+                    "time_str": time_str_kst
                 })
                 
             except:
@@ -141,76 +163,6 @@ def get_google_news(keyword):
         pass
         
     return news_list
-
-def collect_news():
-    print(f"\n📰 뉴스 수집 및 정밀 심사 시작 (제한: {MAX_HOURS}시간)")
-    all_news = []
-    seen_links = set()
-    collected_titles = [] 
-    
-    MAX_TOTAL = 20        
-    MAX_PER_KEYWORD = 4
-    DUPLICATE_THRESHOLD = 10
-    
-    for keyword in KEYWORDS:
-        if len(all_news) >= MAX_TOTAL: 
-            print("🛑 [전체제한] 총 20개를 모두 채워 수집을 종료합니다.")
-            break
-            
-        n_res = get_naver_news(keyword)
-        g_res = get_google_news(keyword)
-        
-        current_keyword_count = 0
-        
-        for news in n_res + g_res:
-            if len(all_news) >= MAX_TOTAL: break
-            
-            if current_keyword_count >= MAX_PER_KEYWORD: 
-                break
-            
-            # [1] 차단 사이트 필터
-            is_excluded = False
-            check_target = (news['link'] + news['title'] + news.get('source', '')).lower()
-            
-            for ban_word in EXCLUDE_LIST:
-                if ban_word.lower() in check_target:
-                    is_excluded = True
-                    print(f"🚫 [사이트차단][{news['origin']}] {news['title']} (이유: {ban_word})") 
-                    break
-            
-            if is_excluded: continue 
-
-            # [2] 링크 중복 필터
-            if news['link'] in seen_links: 
-                continue
-
-            clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
-            
-            # [3] 제목 내용 중복 필터
-            is_similar = False
-            for existing_title in collected_titles:
-                if len(clean_title) < DUPLICATE_THRESHOLD: break
-                for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
-                    sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
-                    if sub_string in existing_title:
-                        is_similar = True
-                        break 
-                if is_similar: break
-
-            if is_similar:
-                print(f"🔗 [내용중복][{news['origin']}] {clean_title}")
-                continue
-
-            # [4] 최종 합격 - 작성 시간 정보(time_str) 함께 출력
-            print(f"✅ [최종선별][{news['origin']}] {clean_title} (작성시간: {news.get('time_str', '알수없음')})")
-            
-            all_news.append({"title": clean_title, "link": news['link']})
-            seen_links.add(news['link'])
-            collected_titles.append(clean_title)
-            current_keyword_count += 1
-                
-    print(f"📊 최종 결과: {len(all_news)}개 뉴스 전송 준비 완료\n")
-    return all_news
     
 # ---------------------------------------------------
 # [전송 로직]
@@ -268,6 +220,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
