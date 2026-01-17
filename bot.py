@@ -21,14 +21,14 @@ else:
 TARGET_CHANNELS = [
     1447898781365567580, # GGX Proto
     1450833963278012558, # Hanta.GG
-    # 987654321098765432,  # 테스트용 (필요 없으면 삭제/주석)
+    # 987654321098765432,  # 테스트용
 ]
 
 # [설정] 검색어 목록
-KEYWORDS = ["이스포츠", "EWC", "ENC", "LCK", "VCT", "FSL", "이터널 리턴 마스터즈", "PUBG", "PWS", "PNC", "PGC", "GSL", "SSL", "ATL", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
+KEYWORDS = ["이스포츠", "LCK", "VCT", "이터널 리턴 이스포츠", "PUBG", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
 
-# [설정] 차단할 단어 (소문자) - 도박 및 커뮤니티 추가됨
-EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "브런치", "인벤", "MSN", "배당"]
+# [설정] 차단할 단어 (소문자)
+EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯"]
 
 # [설정] 뉴스 유효 시간 (단위: 시간)
 MAX_HOURS = 24
@@ -39,7 +39,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [크롤링 함수 1] 네이버 뉴스 (구조 변경 대응 완료)
+# [크롤링 함수 1] 네이버 뉴스
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
@@ -51,7 +51,7 @@ def get_naver_news(keyword):
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # [수정] 가장 안전한 방법: 리스트 항목(li.bx)을 먼저 찾습니다.
+        # 안전한 리스트 검색
         items = soup.select('ul.list_news > li.bx')
         
         for item in items:
@@ -82,7 +82,8 @@ def get_naver_news(keyword):
                     "link": link, 
                     "source": "Naver", 
                     "origin": "네이버",
-                    "time_str": time_log 
+                    "time_str": time_log,
+                    "keyword": keyword # [추가] 어떤 키워드로 찾았는지 저장
                 })
 
     except Exception as e:
@@ -91,14 +92,14 @@ def get_naver_news(keyword):
     return news_list
 
 # ---------------------------------------------------
-# [크롤링 함수 2] 구글 뉴스 (옛날 기사 필터 추가됨)
+# [크롤링 함수 2] 구글 뉴스
 # ---------------------------------------------------
 def get_google_news(keyword):
     news_list = []
     clean_keyword = keyword.replace(" ", "+")
     url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
-    # [연도 필터] 제목에 과거 연도가 있으면 탈락시킴
+    # [연도 필터]
     PAST_YEARS = ["2020", "2021", "2022", "2023", "2024", "2025"] 
 
     try:
@@ -125,10 +126,10 @@ def get_google_news(keyword):
 
                 # [시간 제한]
                 if diff_hours > MAX_HOURS:
-                    print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst})")
+                    # print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst})")
                     continue
                 
-                # [추가 필터] 제목에 과거 연도가 포함되어 있는지 검사
+                # [연도 필터]
                 is_old_title = False
                 for year in PAST_YEARS:
                     if year in entry.title:
@@ -142,7 +143,8 @@ def get_google_news(keyword):
                     "link": entry.link,
                     "source": source_name,
                     "origin": "구글",
-                    "time_str": time_str_kst
+                    "time_str": time_str_kst,
+                    "keyword": keyword # [추가] 어떤 키워드로 찾았는지 저장
                 })
                 
             except:
@@ -155,9 +157,8 @@ def get_google_news(keyword):
     return news_list
 
 # ---------------------------------------------------
-# [통합 함수] 뉴스 수집 및 선별 (이 부분이 없어서 에러가 났었습니다)
+# [통합 함수] 뉴스 수집 및 선별
 # ---------------------------------------------------
-
 def collect_news():
     print(f"\n📰 뉴스 수집 및 정밀 심사 시작 (제한: {MAX_HOURS}시간)")
     all_news = []
@@ -191,7 +192,7 @@ def collect_news():
             for ban_word in EXCLUDE_LIST:
                 if ban_word.lower() in check_target:
                     is_excluded = True
-                    print(f"🚫 [사이트차단][{news['origin']}] {news['title']} (이유: {ban_word})") 
+                    print(f"🚫 [사이트차단][{news['origin']}][키워드:{news['keyword']}] {news['title']} (이유: {ban_word})") 
                     break
             
             if is_excluded: continue 
@@ -214,11 +215,11 @@ def collect_news():
                 if is_similar: break
 
             if is_similar:
-                print(f"🔗 [내용중복][{news['origin']}] {clean_title}")
+                print(f"🔗 [내용중복][{news['origin']}][키워드:{news['keyword']}] {clean_title}")
                 continue
 
-            # [4] 최종 합격
-            print(f"✅ [최종선별][{news['origin']}] {clean_title} (작성시간: {news.get('time_str', '알수없음')})")
+            # [4] 최종 합격 - 키워드 정보 출력 추가
+            print(f"✅ [최종선별][{news['origin']}][키워드:{news['keyword']}] {clean_title} (작성시간: {news.get('time_str', '알수없음')})")
             
             all_news.append({"title": clean_title, "link": news['link']})
             seen_links.add(news['link'])
@@ -286,10 +287,3 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
-
-
-
-
-
-
-
