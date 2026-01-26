@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import feedparser
 import html
 import os
+import re # [추가] 정규표현식 (메시지에서 제목만 뽑아내기 위해 필요)
 from datetime import datetime, timedelta, timezone
 import asyncio
 
@@ -27,16 +28,47 @@ TARGET_CHANNELS = [
 # [설정] 검색어 목록
 KEYWORDS = ["이스포츠", "LCK", "VCT", "이터널 리턴 이스포츠", "PUBG", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
 
-# [설정] 차단할 단어 (소문자)
+# [설정] 차단할 단어
 EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam"]
 
-# [설정] 뉴스 유효 시간 (단위: 시간)
+# [설정] 뉴스 유효 시간
 MAX_HOURS = 24
 
 # 봇 설정
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ---------------------------------------------------
+# [함수 0] 과거 기록 불러오기 (기억력 추가)
+# ---------------------------------------------------
+async def get_past_titles(channel_id):
+    print("⏳ 어제 보낸 뉴스 기록을 확인하는 중...")
+    past_titles = []
+    channel = bot.get_channel(channel_id)
+    
+    if not channel:
+        print("⚠️ 기록을 확인할 채널을 찾지 못했습니다.")
+        return []
+
+    try:
+        # 최근 메시지 5개만 읽어와도 충분함 (어제 뉴스레터가 그 안에 있을 테니까)
+        async for message in channel.history(limit=5):
+            # 봇이 보낸 메시지만 확인
+            if message.author == bot.user:
+                for embed in message.embeds:
+                    if embed.description:
+                        # 정규식으로 [제목](링크) 형태에서 '제목'만 추출
+                        # 패턴: [글자] -> 글자만 뽑아냄
+                        matches = re.findall(r"\[(.*?)\]\(http", embed.description)
+                        past_titles.extend(matches)
+                        
+        print(f"🧠 기억 완료: 과거 뉴스 제목 {len(past_titles)}개를 로드했습니다.")
+        return past_titles
+        
+    except Exception as e:
+        print(f"⚠️ 과거 기록 조회 실패: {e}")
+        return []
 
 # ---------------------------------------------------
 # [크롤링 함수 1] 네이버 뉴스
@@ -50,8 +82,6 @@ def get_naver_news(keyword):
     try:
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
-        
-        # 안전한 리스트 검색
         items = soup.select('ul.list_news > li.bx')
         
         for item in items:
@@ -61,7 +91,6 @@ def get_naver_news(keyword):
             title = title_tag.text
             link = title_tag['href']
             
-            # [Naver 시간 정밀 검사]
             info_group = item.select('.info_group .info')
             is_recent = False
             time_log = "알수없음"
@@ -83,7 +112,7 @@ def get_naver_news(keyword):
                     "source": "Naver", 
                     "origin": "네이버",
                     "time_str": time_log,
-                    "keyword": keyword # [추가] 어떤 키워드로 찾았는지 저장
+                    "keyword": keyword
                 })
 
     except Exception as e:
@@ -99,7 +128,6 @@ def get_google_news(keyword):
     clean_keyword = keyword.replace(" ", "+")
     url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
     
-    # [연도 필터]
     PAST_YEARS = ["2020", "2021", "2022", "2023", "2024", "2025"] 
 
     try:
@@ -109,7 +137,6 @@ def get_google_news(keyword):
                 continue
             
             try:
-                # 1. 시간 계산 (UTC)
                 pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 current_date = datetime.now(timezone.utc)
                 
@@ -124,12 +151,9 @@ def get_google_news(keyword):
                 if hasattr(entry, 'source') and hasattr(entry.source, 'title'):
                     source_name = entry.source.title
 
-                # [시간 제한]
                 if diff_hours > MAX_HOURS:
-                    # print(f"⏰ [구글|탈락] {keyword} | {entry.title} (작성시간: {time_str_kst})")
                     continue
                 
-                # [연도 필터]
                 is_old_title = False
                 for year in PAST_YEARS:
                     if year in entry.title:
@@ -144,7 +168,7 @@ def get_google_news(keyword):
                     "source": source_name,
                     "origin": "구글",
                     "time_str": time_str_kst,
-                    "keyword": keyword # [추가] 어떤 키워드로 찾았는지 저장
+                    "keyword": keyword
                 })
                 
             except:
@@ -157,9 +181,9 @@ def get_google_news(keyword):
     return news_list
 
 # ---------------------------------------------------
-# [통합 함수] 뉴스 수집 및 선별
+# [통합 함수] 뉴스 수집 및 선별 (과거 기록 비교 추가)
 # ---------------------------------------------------
-def collect_news():
+def collect_news(past_titles):
     print(f"\n📰 뉴스 수집 및 정밀 심사 시작 (제한: {MAX_HOURS}시간)")
     all_news = []
     seen_links = set()
@@ -167,7 +191,7 @@ def collect_news():
     
     MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 4
-    DUPLICATE_THRESHOLD = 8
+    DUPLICATE_THRESHOLD = 10
     
     for keyword in KEYWORDS:
         if len(all_news) >= MAX_TOTAL: 
@@ -181,9 +205,7 @@ def collect_news():
         
         for news in n_res + g_res:
             if len(all_news) >= MAX_TOTAL: break
-            
-            if current_keyword_count >= MAX_PER_KEYWORD: 
-                break
+            if current_keyword_count >= MAX_PER_KEYWORD: break
             
             # [1] 차단 사이트 필터
             is_excluded = False
@@ -198,12 +220,11 @@ def collect_news():
             if is_excluded: continue 
 
             # [2] 링크 중복 필터
-            if news['link'] in seen_links: 
-                continue
+            if news['link'] in seen_links: continue
 
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
-            # [3] 제목 내용 중복 필터
+            # [3] 제목 내용 중복 필터 (오늘 수집한 것들끼리 비교)
             is_similar = False
             for existing_title in collected_titles:
                 if len(clean_title) < DUPLICATE_THRESHOLD: break
@@ -213,12 +234,31 @@ def collect_news():
                         is_similar = True
                         break 
                 if is_similar: break
-
+            
             if is_similar:
                 print(f"🔗 [내용중복][{news['origin']}][키워드:{news['keyword']}] {clean_title}")
                 continue
+            
+            # [4] ★ 과거 기록(어제 뉴스) 중복 필터 (추가됨) ★
+            is_past_duplicate = False
+            for past_title in past_titles:
+                # 과거 제목이 너무 짧으면 패스
+                if len(clean_title) < DUPLICATE_THRESHOLD or len(past_title) < DUPLICATE_THRESHOLD:
+                    break
+                
+                # 10글자 이상 겹치는지 확인
+                for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
+                    sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
+                    if sub_string in past_title:
+                        is_past_duplicate = True
+                        break
+                if is_past_duplicate: break
+                
+            if is_past_duplicate:
+                print(f"🧟 [어제뉴스중복] {clean_title} (어제 이미 전송됨)")
+                continue
 
-            # [4] 최종 합격 - 키워드 정보 출력 추가
+            # [5] 최종 합격
             print(f"✅ [최종선별][{news['origin']}][키워드:{news['keyword']}] {clean_title} (작성시간: {news.get('time_str', '알수없음')})")
             
             all_news.append({"title": clean_title, "link": news['link']})
@@ -276,9 +316,19 @@ async def on_ready():
     print(f"✅ 봇 로그인: {bot.user}")
     
     try:
-        todays_news = collect_news()
+        # 1. 봇이 기억을 되살립니다 (어제 보낸 뉴스 제목 가져오기)
+        # TARGET_CHANNELS의 첫 번째 채널을 기준으로 기록을 확인합니다.
+        past_titles = []
+        if TARGET_CHANNELS:
+            past_titles = await get_past_titles(TARGET_CHANNELS[0])
+            
+        # 2. 어제 기록(past_titles)을 전달하여 뉴스를 수집합니다.
+        todays_news = collect_news(past_titles)
+        
+        # 3. 전송
         for channel_id in TARGET_CHANNELS:
             await send_newsletter(channel_id, todays_news)
+            
     except Exception as e:
         print(f"❌ 실행 중 치명적 오류 발생: {e}")
     
@@ -287,9 +337,6 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
-
-
-
 
 
 
