@@ -29,7 +29,7 @@ TARGET_CHANNELS = [
 KEYWORDS = ["이스포츠", "LCK", "VCT", "이터널 리턴 이스포츠", "PUBG", "티원", "Faker", "Gen.G", "HLE", "kt Rolster", "디플러스 기아", "피어엑스", "농심 레드포스", "한진 브리온", "DRX", "DN SOOPers"]
 
 # [설정] 차단할 단어
-EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam"]
+EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam", "ZUM"]
 
 # [설정] 뉴스 유효 시간
 MAX_HOURS = 24
@@ -191,7 +191,7 @@ def collect_news(past_titles):
     
     MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 4
-    DUPLICATE_THRESHOLD = 10
+    DUPLICATE_THRESHOLD = 6
     
     for keyword in KEYWORDS:
         if len(all_news) >= MAX_TOTAL: 
@@ -337,6 +337,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
