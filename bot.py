@@ -32,16 +32,18 @@ TARGET_CHANNELS = [
 # 👑 1. 프리미엄 키워드 (제목에 1개만 있어도 무조건 선별)
 # -> 핵심 선수, 인기 팀, 매우 중요한 대회 명칭 등
 PREMIUM_KEYWORDS = [
-    "Faker", "페이커", "T1", "티원", 
-    "World Championship", "롤드컵", "MSI", 
-    "Zeus", "Oner", "Gumayusi", "Keria", # 제오구케
-    "Chovy", "ShowMaker", "Ruler", "Viper" # 슈퍼스타
+    "이스포츠", "esports", # 포괄
+
 ]
 
 # 🧢 2. 일반 키워드 (제목에 2개 이상 있어야 선별)
 # -> 리그 이름, 일반 팀명, 흔한 이스포츠 용어
 NORMAL_KEYWORDS = [
-    "이스포츠", "e-sports", "LoL", "League of Legends",
+    "LoL", "League of Legends",
+    "Faker", "페이커", "T1", "티원", #T1 선수
+    "World Championship", "롤드컵", "MSI", 
+    "Zeus", "Oner", "Gumayusi", "Keria", # 제오구케
+    "Chovy", "ShowMaker", "Ruler", "Viper" # 슈퍼스타
     "LCK", "LPL", "LEC", "LCS", "VCT", "발로란트", "PUBG", "배틀그라운드", "이터널 리턴",
     "Gen.G", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO",
     "우승", "결승", "플레이오프", "개막", "인터뷰", "단독", "속보", "오피셜"
@@ -407,4 +409,5 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
