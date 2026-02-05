@@ -64,10 +64,10 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [함수 0] 과거 기록 불러오기
+# [함수 0] 과거 기록 불러오기 (시간 제한 추가: 최근 30시간)
 # ---------------------------------------------------
 async def get_past_titles(channel_id):
-    print("⏳ 어제 보낸 뉴스 기록을 확인하는 중...")
+    print("⏳ [검증] 디스코드 채널에 '실제로 업로드된' 최근 뉴스를 확인합니다...")
     past_titles = []
     channel = bot.get_channel(channel_id)
     
@@ -75,15 +75,33 @@ async def get_past_titles(channel_id):
         print("⚠️ 기록을 확인할 채널을 찾지 못했습니다.")
         return []
 
+    # [수정] 최근 30시간 이내의 메시지만 확인 (어제 뉴스레터만 타겟팅)
+    # 봇이 하루 한 번 돈다면 24시간 + 여유분 6시간 = 30시간이면 충분합니다.
+    check_limit_time = datetime.now(timezone.utc) - timedelta(hours=30)
+    
     try:
+        # 최근 메시지를 가져오되, 날짜를 확인해서 너무 옛날 거면 멈춥니다.
+        # limit=10은 '최대 개수'일 뿐, 날짜가 지나면 break로 빠져나옵니다.
         async for message in channel.history(limit=10):
-            if message.author == bot.user:
-                for embed in message.embeds:
-                    if embed.description:
-                        matches = re.findall(r"\[(.*?)\]\(http", embed.description)
-                        past_titles.extend(matches)
-        print(f"🧠 기억 완료: 과거 뉴스 제목 {len(past_titles)}개를 로드했습니다.")
+            
+            # 1. 봇이 보낸 메시지인지 확인
+            if message.author != bot.user:
+                continue
+                
+            # 2. 메시지 작성 시간이 30시간보다 더 됐으면 그만 확인 (과거 뉴스임)
+            if message.created_at < check_limit_time:
+                # print(f"🛑 [기록종료] {message.created_at} 메시지는 30시간이 지나 확인하지 않습니다.")
+                break
+
+            # 3. 제목 추출
+            for embed in message.embeds:
+                if embed.description:
+                    matches = re.findall(r"\[(.*?)\]\(http", embed.description)
+                    past_titles.extend(matches)
+                        
+        print(f"🧠 기억 완료: 최근 30시간 내 업로드된 뉴스 {len(past_titles)}개를 확인했습니다.")
         return past_titles
+        
     except Exception as e:
         print(f"⚠️ 과거 기록 조회 실패: {e}")
         return []
@@ -389,3 +407,4 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
