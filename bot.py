@@ -31,12 +31,13 @@ TARGET_CHANNELS = [
 
 # 👑 1. 프리미엄 키워드 (1개만 있어도 합격)
 PREMIUM_KEYWORDS = [
-    "이스포츠", "Esports" #이스포츠 정의
+    "이스포츠", #이스포츠 정의
 
 ]
 
 # 🧢 2. 일반 키워드 (2개 이상 있어야 합격)
 NORMAL_KEYWORDS = [
+    "Esports", #전문
     "LoL", "League of Legends", "Valorant", "이터널 리턴", "PUBG", #종목명
     "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PGS", "PGC", #국제 대회명
     "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
@@ -129,15 +130,15 @@ def clean_title_for_check(title):
 
 
 # ---------------------------------------------------
-# [크롤링 함수 1] 네이버 뉴스 (구조 변경 대응 + 디버깅 로그 추가)
+# [크롤링 함수 1] 다음(Daum) 뉴스 (네이버 대체)
 # ---------------------------------------------------
-def get_naver_news(keyword):
+def get_daum_news(keyword):
     news_list = []
-    # 검색어 공백 처리
     clean_keyword = keyword.replace(" ", "+")
-    url = f"https://search.naver.com/search.naver?where=news&query={clean_keyword}&sort=1"
     
-    # [팁] 가끔 네이버가 봇을 차단하면 User-Agent를 이렇게 길게 써주면 잘 뚫립니다.
+    # [설정] sort=recency: 최신순 정렬
+    url = f"https://search.daum.net/search?w=news&q={clean_keyword}&sort=recency"
+    
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
@@ -146,51 +147,45 @@ def get_naver_news(keyword):
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # [수정] 더 넓은 범위의 '뉴스 껍데기(wrapper)'를 찾습니다.
-        # 기존: items = soup.select('ul.list_news > li.bx')
-        items = soup.select('div.news_wrap')
-        
-        # [디버깅 로그] 실제로 네이버 뉴스를 몇 개 찾았는지 눈으로 확인
-        # (너무 시끄러우면 나중에 주석 처리하세요)
-        # print(f"🔍 [네이버] '{keyword}' 원본 검색결과: {len(items)}개 발견")
+        # 다음 뉴스 리스트 선택자
+        items = soup.select('ul.c-list-basic > li')
         
         for item in items:
-            title_tag = item.select_one('a.news_tit')
+            # 제목 및 링크 추출
+            title_tag = item.select_one('.item-title a')
             if not title_tag: continue
             
-            title = title_tag.text
+            title = title_tag.text.strip()
             link = title_tag['href']
             
-            # [Naver 시간 정밀 검사]
-            # info_group이 뉴스 랩핑 안에 있는지 확인
-            info_group = item.select('.info_group .info')
+            # [Daum 시간 정밀 검사]
+            # gem-subinfo 안에 "55분전", "1시간전" 등의 정보가 있음
+            date_info = item.select_one('.gem-subinfo')
             is_recent = False
             time_log = "알수없음"
             
-            for info in info_group:
-                text = info.text
-                # "분 전", "시간 전"이 포함되어야 진짜 최신 뉴스
-                if "분 전" in text or "시간 전" in text:
-                    time_log = text 
-                    # "1일 전" 같은 게 섞여 있으면 수정된 구 기사일 확률 높음 -> 탈락
-                    if "일 전" in text:
+            if date_info:
+                text = date_info.text.strip()
+                # "분전", "시간전"이 포함되어야 진짜 최신 뉴스
+                if "분전" in text or "시간전" in text:
+                    time_log = text
+                    # "1일전" 등은 탈락 (다음은 띄어쓰기 없이 '1시간전'으로 표기하기도 함)
+                    if "일전" in text or "일 전" in text:
                         is_recent = False
-                        break
-                    is_recent = True
-                    break
+                    else:
+                        is_recent = True
             
             if is_recent:
                 news_list.append({
                     "title": title, 
                     "link": link, 
-                    "source": "Naver", 
-                    "origin": "네이버",
-                    "time_str": time_log,
-                    "search_keyword": keyword
+                    "source": "Daum", 
+                    "origin": "다음", # 출처 표기 변경
+                    "time_str": time_log
                 })
 
     except Exception as e:
-        print(f"❌ 네이버 오류({keyword}): {e}")
+        print(f"❌ 다음(Daum) 오류({keyword}): {e}")
         pass
         
     return news_list
@@ -273,7 +268,7 @@ def collect_news(past_titles):
             print("🛑 [전체제한] 총 20개를 모두 채워 수집을 종료합니다.")
             break
             
-        n_res = get_naver_news(keyword)
+        n_res = get_daum_news(keyword)
         g_res = get_google_news(keyword)
         
         current_keyword_count = 0
@@ -429,6 +424,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
