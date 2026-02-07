@@ -37,7 +37,7 @@ PREMIUM_KEYWORDS = [
 
 # 🧢 2. 일반 키워드 (2개 이상 있어야 합격)
 NORMAL_KEYWORDS = [
-    "LoL", "League of Legends", "Valorant" "이터널 리턴", "PUBG", #종목명
+    "LoL", "League of Legends", "Valorant", "이터널 리턴", "PUBG", #종목명
     "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PGS", "PGC", #국제 대회명
     "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
     "T1", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO", #이스포츠 팀
@@ -127,19 +127,32 @@ def clean_title_for_check(title):
         temp_title = temp_title.replace(word, "")
     return temp_title.strip()
 
+
 # ---------------------------------------------------
-# [크롤링 함수 1] 네이버 뉴스
+# [크롤링 함수 1] 네이버 뉴스 (구조 변경 대응 + 디버깅 로그 추가)
 # ---------------------------------------------------
 def get_naver_news(keyword):
     news_list = []
+    # 검색어 공백 처리
     clean_keyword = keyword.replace(" ", "+")
     url = f"https://search.naver.com/search.naver?where=news&query={clean_keyword}&sort=1"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    # [팁] 가끔 네이버가 봇을 차단하면 User-Agent를 이렇게 길게 써주면 잘 뚫립니다.
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
     
     try:
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, 'html.parser')
-        items = soup.select('ul.list_news > li.bx')
+        
+        # [수정] 더 넓은 범위의 '뉴스 껍데기(wrapper)'를 찾습니다.
+        # 기존: items = soup.select('ul.list_news > li.bx')
+        items = soup.select('div.news_wrap')
+        
+        # [디버깅 로그] 실제로 네이버 뉴스를 몇 개 찾았는지 눈으로 확인
+        # (너무 시끄러우면 나중에 주석 처리하세요)
+        # print(f"🔍 [네이버] '{keyword}' 원본 검색결과: {len(items)}개 발견")
         
         for item in items:
             title_tag = item.select_one('a.news_tit')
@@ -148,14 +161,18 @@ def get_naver_news(keyword):
             title = title_tag.text
             link = title_tag['href']
             
+            # [Naver 시간 정밀 검사]
+            # info_group이 뉴스 랩핑 안에 있는지 확인
             info_group = item.select('.info_group .info')
             is_recent = False
             time_log = "알수없음"
             
             for info in info_group:
                 text = info.text
+                # "분 전", "시간 전"이 포함되어야 진짜 최신 뉴스
                 if "분 전" in text or "시간 전" in text:
                     time_log = text 
+                    # "1일 전" 같은 게 섞여 있으면 수정된 구 기사일 확률 높음 -> 탈락
                     if "일 전" in text:
                         is_recent = False
                         break
@@ -168,13 +185,16 @@ def get_naver_news(keyword):
                     "link": link, 
                     "source": "Naver", 
                     "origin": "네이버",
-                    "time_str": time_log
+                    "time_str": time_log,
+                    "search_keyword": keyword
                 })
 
     except Exception as e:
         print(f"❌ 네이버 오류({keyword}): {e}")
         pass
+        
     return news_list
+    
 
 # ---------------------------------------------------
 # [크롤링 함수 2] 구글 뉴스
@@ -409,6 +429,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
