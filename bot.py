@@ -26,36 +26,34 @@ TARGET_CHANNELS = [
 ]
 
 # =====================================================================
-# [★중요★] 키워드 레벨 설정
+# [키워드 설정]
 # =====================================================================
 
-# 👑 1. 프리미엄 키워드 (제목에 1개만 있어도 무조건 선별)
-# -> 핵심 선수, 인기 팀, 매우 중요한 대회 명칭 등
+# 👑 1. 프리미엄 키워드 (1개만 있어도 합격)
 PREMIUM_KEYWORDS = [
-    "이스포츠", "esports", # 포괄
-
+    "Faker", "페이커", "T1", "티원", 
+    "World Championship", "롤드컵", "MSI", 
+    "Zeus", "Oner", "Gumayusi", "Keria", 
+    "Chovy", "ShowMaker", "Ruler", "Viper"
 ]
 
-# 🧢 2. 일반 키워드 (제목에 2개 이상 있어야 선별)
-# -> 리그 이름, 일반 팀명, 흔한 이스포츠 용어
+# 🧢 2. 일반 키워드 (2개 이상 있어야 합격)
 NORMAL_KEYWORDS = [
-    "LoL", "League of Legends",
-    "Faker", "페이커", "T1", "티원", #T1 선수
-    "World Championship", "롤드컵", "MSI", 
-    "Zeus", "Oner", "Gumayusi", "Keria", # 제오구케
-    "Chovy", "ShowMaker", "Ruler", "Viper" # 슈퍼스타
+    "이스포츠", "e-sports", "LoL", "League of Legends",
     "LCK", "LPL", "LEC", "LCS", "VCT", "발로란트", "PUBG", "배틀그라운드", "이터널 리턴",
     "Gen.G", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO",
     "우승", "결승", "플레이오프", "개막", "인터뷰", "단독", "속보", "오피셜"
 ]
 
-# (검색용) 봇은 이 두 리스트를 합쳐서 검색에 사용합니다.
 SEARCH_KEYWORDS = list(set(PREMIUM_KEYWORDS + NORMAL_KEYWORDS))
 
 # =====================================================================
 
-# [설정] 차단할 단어
+# [설정] 차단할 단어 (아예 수집 제외)
 EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam", "ZUM"]
+
+# [설정] ★중복 검사에서만 무시할 단어★ (이 단어들은 겹쳐도 중복으로 안 침)
+IGNORE_DUPLICATE_WORDS = ["Esports", "이스포츠", "e스포츠", "2026", "경기", "리그", "vs", "오늘", "내일", "LCK", "발로란트"]
 
 # [설정] 뉴스 유효 시간
 MAX_HOURS = 24
@@ -66,7 +64,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ---------------------------------------------------
-# [함수 0] 과거 기록 불러오기 (시간 제한 추가: 최근 30시간)
+# [함수 0] 과거 기록 불러오기 (최근 30시간 제한)
 # ---------------------------------------------------
 async def get_past_titles(channel_id):
     print("⏳ [검증] 디스코드 채널에 '실제로 업로드된' 최근 뉴스를 확인합니다...")
@@ -77,25 +75,16 @@ async def get_past_titles(channel_id):
         print("⚠️ 기록을 확인할 채널을 찾지 못했습니다.")
         return []
 
-    # [수정] 최근 30시간 이내의 메시지만 확인 (어제 뉴스레터만 타겟팅)
-    # 봇이 하루 한 번 돈다면 24시간 + 여유분 6시간 = 30시간이면 충분합니다.
+    # 최근 30시간 이내의 메시지만 확인
     check_limit_time = datetime.now(timezone.utc) - timedelta(hours=30)
     
     try:
-        # 최근 메시지를 가져오되, 날짜를 확인해서 너무 옛날 거면 멈춥니다.
-        # limit=10은 '최대 개수'일 뿐, 날짜가 지나면 break로 빠져나옵니다.
-        async for message in channel.history(limit=10):
-            
-            # 1. 봇이 보낸 메시지인지 확인
+        async for message in channel.history(limit=20): # 넉넉하게 20개 확인
             if message.author != bot.user:
                 continue
-                
-            # 2. 메시지 작성 시간이 30시간보다 더 됐으면 그만 확인 (과거 뉴스임)
             if message.created_at < check_limit_time:
-                # print(f"🛑 [기록종료] {message.created_at} 메시지는 30시간이 지나 확인하지 않습니다.")
                 break
 
-            # 3. 제목 추출
             for embed in message.embeds:
                 if embed.description:
                     matches = re.findall(r"\[(.*?)\]\(http", embed.description)
@@ -103,22 +92,18 @@ async def get_past_titles(channel_id):
                         
         print(f"🧠 기억 완료: 최근 30시간 내 업로드된 뉴스 {len(past_titles)}개를 확인했습니다.")
         return past_titles
-        
     except Exception as e:
         print(f"⚠️ 과거 기록 조회 실패: {e}")
         return []
 
 # ---------------------------------------------------
-# [함수 0.5] 키워드 레벨 판독기 (핵심 알고리즘)
+# [함수 0.5] 키워드 레벨 판독기
 # ---------------------------------------------------
 def check_keyword_level(title):
-    # 1. 프리미엄 키워드 검사 (1개만 있어도 합격)
     for p_key in PREMIUM_KEYWORDS:
-        # 대소문자 구분 없이 검사하려면 lower() 사용
         if p_key.lower() in title.lower():
             return True, f"👑프리미엄({p_key})"
 
-    # 2. 일반 키워드 검사 (2개 이상 있어야 합격)
     count = 0
     matched = []
     for n_key in NORMAL_KEYWORDS:
@@ -130,6 +115,17 @@ def check_keyword_level(title):
         return True, f"🧢일반합격({', '.join(matched)})"
 
     return False, f"조건미달(일반 {count}개)"
+
+# ---------------------------------------------------
+# [함수 0.6] ★중복 검사용 문장 청소기★ (추가됨)
+# ---------------------------------------------------
+def clean_title_for_check(title):
+    # 비교를 위해 잠시 특정 단어들을 지운 제목을 만듭니다.
+    temp_title = title
+    for word in IGNORE_DUPLICATE_WORDS:
+        # 대소문자 구분 없이 제거하기 위해 replace 사용 (단순화)
+        temp_title = temp_title.replace(word, "")
+    return temp_title.strip()
 
 # ---------------------------------------------------
 # [크롤링 함수 1] 네이버 뉴스
@@ -172,8 +168,7 @@ def get_naver_news(keyword):
                     "link": link, 
                     "source": "Naver", 
                     "origin": "네이버",
-                    "time_str": time_log,
-                    "search_keyword": keyword
+                    "time_str": time_log
                 })
 
     except Exception as e:
@@ -228,8 +223,7 @@ def get_google_news(keyword):
                     "link": entry.link,
                     "source": source_name,
                     "origin": "구글",
-                    "time_str": time_str_kst,
-                    "search_keyword": keyword
+                    "time_str": time_str_kst
                 })
                 
             except:
@@ -242,7 +236,7 @@ def get_google_news(keyword):
     return news_list
 
 # ---------------------------------------------------
-# [통합 함수] 뉴스 수집 및 선별 (키워드 레벨 적용)
+# [통합 함수] 뉴스 수집 및 선별
 # ---------------------------------------------------
 def collect_news(past_titles):
     print(f"\n📰 뉴스 수집 및 정밀 심사 시작 (제한: {MAX_HOURS}시간)")
@@ -254,7 +248,6 @@ def collect_news(past_titles):
     MAX_PER_KEYWORD = 4
     DUPLICATE_THRESHOLD = 9 
     
-    # 검색은 모든 키워드(SEARCH_KEYWORDS)로 수행
     for keyword in SEARCH_KEYWORDS:
         if len(all_news) >= MAX_TOTAL: 
             print("🛑 [전체제한] 총 20개를 모두 채워 수집을 종료합니다.")
@@ -281,13 +274,9 @@ def collect_news(past_titles):
             
             if is_excluded: continue 
             
-            # [1.5] ★ 키워드 레벨(Premium/Normal) 필터 ★
-            # 여기서 제목을 검사해서 합격 여부를 결정합니다.
+            # [1.5] 키워드 레벨 필터
             is_qualified, qualify_reason = check_keyword_level(news['title'])
-            
             if not is_qualified:
-                # 로그가 너무 많으면 이 줄을 주석 처리하세요
-                # print(f"📉 [조건미달] {news['title']} (사유: {qualify_reason})")
                 continue
 
             # [2] 링크 중복 필터
@@ -295,14 +284,22 @@ def collect_news(past_titles):
 
             clean_title = html.unescape(news['title']).replace("[", "").replace("]", "").strip()
             
+            # [★중요★] 중복 검사를 위해 '무시할 단어'를 지운 제목을 만듭니다.
+            check_title = clean_title_for_check(clean_title)
+            
             # [3] 제목 내용 중복 필터
             is_similar = False
             match_cause = "" 
             for existing_title in collected_titles:
-                if len(clean_title) < DUPLICATE_THRESHOLD: break
-                for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
-                    sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
-                    if sub_string in existing_title:
+                # 비교 대상도 '청소된 제목'으로 비교합니다.
+                check_existing = clean_title_for_check(existing_title)
+                
+                if len(check_title) < DUPLICATE_THRESHOLD: break
+                
+                # 청소된 제목끼리 비교
+                for i in range(len(check_title) - DUPLICATE_THRESHOLD + 1):
+                    sub_string = check_title[i : i + DUPLICATE_THRESHOLD]
+                    if sub_string in check_existing:
                         is_similar = True
                         match_cause = sub_string 
                         break 
@@ -318,12 +315,15 @@ def collect_news(past_titles):
             matched_past_title = "" 
             
             for past_title in past_titles:
-                if len(clean_title) < DUPLICATE_THRESHOLD or len(past_title) < DUPLICATE_THRESHOLD:
+                # 과거 제목도 청소해서 비교
+                check_past = clean_title_for_check(past_title)
+                
+                if len(check_title) < DUPLICATE_THRESHOLD or len(check_past) < DUPLICATE_THRESHOLD:
                     break
                 
-                for i in range(len(clean_title) - DUPLICATE_THRESHOLD + 1):
-                    sub_string = clean_title[i : i + DUPLICATE_THRESHOLD]
-                    if sub_string in past_title:
+                for i in range(len(check_title) - DUPLICATE_THRESHOLD + 1):
+                    sub_string = check_title[i : i + DUPLICATE_THRESHOLD]
+                    if sub_string in check_past:
                         is_past_duplicate = True
                         past_match_cause = sub_string 
                         matched_past_title = past_title 
@@ -331,10 +331,10 @@ def collect_news(past_titles):
                 if is_past_duplicate: break
                 
             if is_past_duplicate:
-                print(f"🧟 [어제뉴스중복] {clean_title} (겹친단어: '{past_match_cause}')")
+                print(f"🧟 [어제뉴스중복] {clean_title} (겹친단어: '{past_match_cause}' / 대상: {matched_past_title})")
                 continue
 
-            # [5] 최종 합격 (합격 사유 함께 출력)
+            # [5] 최종 합격
             print(f"✅ [{qualify_reason}][{news['origin']}] {clean_title}")
             
             all_news.append({"title": clean_title, "link": news['link']})
@@ -409,5 +409,3 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
-
-
