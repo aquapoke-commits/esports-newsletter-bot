@@ -31,6 +31,7 @@ TARGET_CHANNELS = [
 
 # 👑 1. 프리미엄 키워드 (1개만 있어도 합격)
 PREMIUM_KEYWORDS = [
+    #이스포츠 정의
     "Faker", "페이커", "T1", "티원", 
     "World Championship", "롤드컵", "MSI", 
     "Zeus", "Oner", "Gumayusi", "Keria", 
@@ -39,6 +40,11 @@ PREMIUM_KEYWORDS = [
 
 # 🧢 2. 일반 키워드 (2개 이상 있어야 합격)
 NORMAL_KEYWORDS = [
+    #종목명
+    #리그명
+    #이스포츠 팀
+    #특정 키워드
+    
     "이스포츠", "e-sports", "LoL", "League of Legends",
     "LCK", "LPL", "LEC", "LCS", "VCT", "발로란트", "PUBG", "배틀그라운드", "이터널 리턴",
     "Gen.G", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO",
@@ -409,3 +415,4 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
