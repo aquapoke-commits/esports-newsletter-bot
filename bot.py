@@ -31,24 +31,18 @@ TARGET_CHANNELS = [
 
 # 👑 1. 프리미엄 키워드 (1개만 있어도 합격)
 PREMIUM_KEYWORDS = [
-    #이스포츠 정의
-    "Faker", "페이커", "T1", "티원", 
-    "World Championship", "롤드컵", "MSI", 
-    "Zeus", "Oner", "Gumayusi", "Keria", 
-    "Chovy", "ShowMaker", "Ruler", "Viper"
+    "이스포츠", "Esports" #이스포츠 정의
+
 ]
 
 # 🧢 2. 일반 키워드 (2개 이상 있어야 합격)
 NORMAL_KEYWORDS = [
-    #종목명
-    #리그명
-    #이스포츠 팀
-    #특정 키워드
+    "LoL", "League of Legends", "Valorant" "이터널 리턴", "PUBG", #종목명
+    "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PGS", "PGC", #국제 대회명
+    "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
+    "T1", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO", #이스포츠 팀
+    "우승", "결승", "플레이오프", "개막", "인터뷰", "단독", "속보", "오피셜" #특정 키워드
     
-    "이스포츠", "e-sports", "LoL", "League of Legends",
-    "LCK", "LPL", "LEC", "LCS", "VCT", "발로란트", "PUBG", "배틀그라운드", "이터널 리턴",
-    "Gen.G", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO",
-    "우승", "결승", "플레이오프", "개막", "인터뷰", "단독", "속보", "오피셜"
 ]
 
 SEARCH_KEYWORDS = list(set(PREMIUM_KEYWORDS + NORMAL_KEYWORDS))
@@ -117,7 +111,7 @@ def check_keyword_level(title):
             count += 1
             matched.append(n_key)
             
-    if count >= 2:
+    if count >= 3:
         return True, f"🧢일반합격({', '.join(matched)})"
 
     return False, f"조건미달(일반 {count}개)"
@@ -415,4 +409,5 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
