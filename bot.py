@@ -112,7 +112,7 @@ def check_keyword_level(title):
             count += 1
             matched.append(n_key)
             
-    if count >= 3:
+    if count >= 2:
         return True, f"🧢일반합격({', '.join(matched)})"
 
     return False, f"조건미달(일반 {count}개)"
@@ -424,6 +424,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
