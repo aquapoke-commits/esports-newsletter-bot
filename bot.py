@@ -197,7 +197,7 @@ def get_daum_news(keyword):
 def get_google_news(keyword):
     news_list = []
     clean_keyword = keyword.replace(" ", "+")
-    url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko"
+    url = f"https://news.google.com/rss/search?q={clean_keyword}+when:1d&hl=ko&gl=KR&ceid=KR:ko&num=100"
     
     PAST_YEARS = ["2020", "2021", "2022", "2023", "2024", "2025"] 
 
@@ -260,7 +260,7 @@ def collect_news(past_titles):
     collected_titles = [] 
     
     MAX_TOTAL = 20        
-    MAX_PER_KEYWORD = 4
+    MAX_PER_KEYWORD = 8
     DUPLICATE_THRESHOLD = 9 
     
     for keyword in SEARCH_KEYWORDS:
@@ -424,6 +424,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
