@@ -43,7 +43,7 @@ NORMAL_KEYWORDS = [
     "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PGS", "PGC", "EWC", "ENC", #국제 대회명
     "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
     "T1", "젠지", "HLE", "한화생명", "DK", "디플러스", "KT", "DRX", "FOX", "NS", "BRO", #이스포츠 팀
-    "학회", "국회", "IESF", "이코노미" #특정 키워드
+    "학회", "IESF", "이코노미" #특정 키워드
     
 ]
 
@@ -425,6 +425,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
