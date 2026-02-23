@@ -52,7 +52,7 @@ SEARCH_KEYWORDS = list(set(PREMIUM_KEYWORDS + NORMAL_KEYWORDS))
 # =====================================================================
 
 # [설정] 차단할 단어 (아예 수집 제외)
-EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam", "ZUM"]
+EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam", "ZUM", "포토"]
 
 # [설정] ★중복 검사에서만 무시할 단어★ (이 단어들은 겹쳐도 중복으로 안 침)
 IGNORE_DUPLICATE_WORDS = ["Esports", "이스포츠", "e스포츠", "2025", "2026", "경기", "리그", "vs", "오늘", "내일", "Insider" ]
@@ -425,6 +425,7 @@ async def on_ready():
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
 
 
 
