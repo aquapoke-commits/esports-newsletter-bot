@@ -263,7 +263,7 @@ def collect_news(past_titles):
     
     MAX_TOTAL = 20        
     MAX_PER_KEYWORD = 8
-    DUPLICATE_THRESHOLD = 8
+    DUPLICATE_THRESHOLD = 7
     
     for keyword in SEARCH_KEYWORDS:
         if len(all_news) >= MAX_TOTAL: 
