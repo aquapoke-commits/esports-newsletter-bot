@@ -46,7 +46,7 @@ NORMAL_KEYWORDS = [
     "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PWS", "PGS", "PGC", "EWC", "ENC", #국제 대회명
     "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
     "T1", "젠지", "HLE", "한화생명", "DK", "디플러스 기아", "KT 롤스터", "DRX", "디알엑스", "피어엑스", "농심 레드포스", "한진 브리온", #이스포츠 팀
-    "학회", "IESF", "이코노미" #특정 키워드
+    "학회", "IESF", #특정 키워드
     
 ]
 
