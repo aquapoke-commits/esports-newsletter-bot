@@ -41,9 +41,9 @@ PREMIUM_KEYWORDS = [
 NORMAL_KEYWORDS = [
     "Esports", #전문
     "TCG", "MOBA", "FPS", "MMORPG", #장르
-    "LoL", "League of Legends", "Valorant", "이터널 리턴", "PUBG", "FC Online", "스타크래프트", "나혼렙", "마블 라이벌즈", "리프트바운드", "섀도우버스", #종목명
+    "LoL", "League of Legends", "Valorant", "이터널 리턴", "PUBG", "FC Online", "스타크래프트", "나혼렙", "마블 라이벌즈", "리프트바운드", "섀도우버스", "철권", "스트리트 파이터", "로켓 리그", #종목명
     "라이엇", "넷마블", "크래프톤", "블리자드", "넥슨", #종목사
-    "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PGS", "PGC", "EWC", "ENC", #국제 대회명
+    "World Championship", "롤드컵", "MSI", "퍼스트 스탠드", "VCT", "PWS", "PGS", "PGC", "EWC", "ENC", #국제 대회명
     "LCK", "LPL", "LEC", "LCS", "CBLOL", "LCP", #지역 리그명
     "T1", "젠지", "HLE", "한화생명", "DK", "디플러스 기아", "KT 롤스터", "DRX", "디알엑스", "피어엑스", "농심 레드포스", "한진 브리온", #이스포츠 팀
     "학회", "IESF", "이코노미" #특정 키워드
