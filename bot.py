@@ -58,7 +58,7 @@ SEARCH_KEYWORDS = list(set(PREMIUM_KEYWORDS + NORMAL_KEYWORDS))
 EXCLUDE_LIST = ["theqoo", "더쿠", "instiz", "인스티즈", "fmkorea", "펨코", "dcinside", "디시", "바카라", "토토", "카지노", "슬롯", "MSN", "인벤", "보통주", "패치노트", "사모대출", "investing","vietnam", "ZUM", "포토", "브레인박스"]
 
 # [설정] ★중복 검사에서만 무시할 단어★ (이 단어들은 겹쳐도 중복으로 안 침)
-IGNORE_DUPLICATE_WORDS = ["Esports", "이스포츠", "e스포츠", "2025", "2026", "경기", "리그", "vs", "오늘", "내일", "Insider", "데일리e스포츠", "중앙이코노미뉴스", "웹이코노미", "osen.co.kr" ]
+IGNORE_DUPLICATE_WORDS = ["Esports", "이스포츠", "e스포츠", "2025", "2026", "경기", "리그", "vs", "오늘", "내일", "Insider", "데일리e스포츠", "중앙이코노미뉴스", "웹이코노미", "osen.co.kr", "키움 DRX", "v.daum.net" ]
 
 # [설정] 뉴스 유효 시간
 MAX_HOURS = 24
